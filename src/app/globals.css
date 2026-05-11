@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
+@theme {
+  --color-blender-bg: #282828;
+  --color-blender-panel: #3a3a3a;
+  --color-blender-accent: #4772b3;
+  --color-blender-text: #e6e6e6;
+  --color-blender-node-bg: #424242;
+  --color-blender-node-header: #303030;
+  --color-blender-border: #1d1d1d;
+  --color-blender-input: #1d1d1d;
+  --color-blender-hover: #5680c2;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: var(--color-blender-bg);
+  --foreground: var(--color-blender-text);
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* React Flow Customizations for Blender Theme */
+.react-flow__node {
+  border-radius: 6px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  background-color: var(--color-blender-node-bg);
+  color: var(--color-blender-text);
+  border: 1px solid var(--color-blender-border);
+}
+
+.react-flow__node.selected {
+  outline: 5px solid #fbbf24 !important;
+  box-shadow: 0 0 25px rgba(251, 191, 36, 0.6) !important;
+  border-color: transparent !important;
+}
+
+.react-flow__node.node-intersecting-trash,
+.react-flow__node.node-intersecting-trash > div {
+  outline: 5px solid #ef4444 !important;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.8) !important;
+  border-color: transparent !important;
+}
+
+.react-flow__edge-path {
+  stroke: #888;
+  stroke-width: 2;
+}
+
+.react-flow__controls-button {
+  background-color: var(--color-blender-panel);
+  border-bottom: 1px solid var(--color-blender-border);
+  fill: var(--color-blender-text);
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--color-blender-accent);
+}
+
+.react-flow__minimap {
+  background-color: var(--color-blender-panel);
+  border: 1px solid var(--color-blender-border);
+  border-radius: 4px;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(40, 40, 40, 0.7);
+}
+
+.react-flow__minimap-node {
+  fill: var(--color-blender-node-bg);
+}
+
+/* Custom Scrollbar for better dark mode feel */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-blender-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-blender-panel);
+  border-radius: 6px;
+  border: 3px solid var(--color-blender-bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }

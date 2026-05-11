@@ -1,0 +1,45 @@
+This file defines the 16 possible neighbor combinations for a 4-way isometric grid.
+Please replace the "[TILE NAME]" with the exact prefab string (e.g. "EdgeNorthWest", "OutterCornerSouth") for each combination.
+
+GRID TO SCREEN MAPPING:
+- Grid North (y-1) points UP-RIGHT on the screen.
+- Grid East (x+1) points DOWN-RIGHT on the screen.
+- Grid South (y+1) points DOWN-LEFT on the screen.
+- Grid West (x-1) points UP-LEFT on the screen.
+
+Format: [GridNorth] [GridEast] [GridSouth] [GridWest]
+1 = Land (Neighbor exists)
+0 = Water (Empty, Edge is exposed)
+
+==== ISLAND GENERATION CONSTRAINTS ====
+- Minimum island size: 4x4
+- No 1x1 peninsulas
+- No 1xN bridges
+- Minimum cardinal connections per tile is 2
+
+==== 8-WAY NEIGHBOR MAPPING (For Inner Corners) ====
+Inner corners (concave corners) occur when a tile is fully surrounded by land on its 4 cardinal sides (N, E, S, W = 1), but one of its DIAGONAL neighbors is water.
+
+Format: [GridNorth] [GridEast] [GridSouth] [GridWest] | [NE] [SE] [SW] [NW]
+(Note: Diagonals are only checked if the two adjacent cardinals are 1)
+
+1 1 1 1 | 0 1 1 1 = [Tile_InnerCorner_???] (Water at Top-Right diagonal)
+1 1 1 1 | 1 0 1 1 = [Tile_InnerCorner_???] (Water at Bottom-Right diagonal)
+1 1 1 1 | 1 1 0 1 = [Tile_InnerCorner_???] (Water at Bottom-Left diagonal)
+1 1 1 1 | 1 1 1 0 = [Tile_InnerCorner_???] (Water at Top-Left diagonal)
+
+==== 4-WAY NEIGHBOR MAPPING ====
+1 1 1 1 | 1 1 1 1 = CenterFill (Fully surrounded on all 8 sides)
+
+==== 3 NEIGHBORS (1 side exposed -> usually an Edge) ====
+0 1 1 1 = [Tile_Edge_NorthEast] (Grid North is exposed, meaning UP-RIGHT edge is water)
+1 0 1 1 = [Tile_Edge_SouthEast] (Grid East is exposed, meaning DOWN-RIGHT edge is water)
+1 1 0 1 = [Tile_Edge_SouthWest] (Grid South is exposed, meaning DOWN-LEFT edge is water)
+1 1 1 0 = [Tile_Edge_NorthWest] (Grid West is exposed, meaning UP-LEFT edge is water)
+
+==== 2 NEIGHBORS (2 sides exposed -> usually a Corner or a narrow strip) ====
+0 0 1 1 = [Tile_OutterCorner_East] (Grid North and East exposed -> Corner pointing UP-RIGHT and DOWN-RIGHT)
+1 0 0 1 = [Tile_OutterCorner_South] (Grid East and South exposed -> Corner pointing DOWN-RIGHT and DOWN-LEFT)
+1 1 0 0 = [Tile_OutterCorner_West] (Grid South and West exposed -> Corner pointing DOWN-LEFT and UP-LEFT)
+0 1 1 0 = [Tile_OutterCorner_North] (Grid West and North exposed -> Corner pointing UP-LEFT and UP-RIGHT)
+

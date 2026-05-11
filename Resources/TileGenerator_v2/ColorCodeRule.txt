@@ -1,0 +1,22 @@
+[FOR THE ISLAND]
+8000ff - CenterFill
+
+ffff00 - OutterCornerNorth 	- Top Face Immunity
+0000ff - OutterCornerWest	- Top+Left Face Immunity
+00ff00 - OutterCornerEast	- Top+Right Face Immunity
+ff0000 - OutterCornerSouth	- Top+Right+Left Face Immunity
+
+0080ff - InnerCornerNorth
+80ff00 - InnerCornerWest
+ff0080 - InnerCornerEast
+ffbf00 - InnerCornerSouth
+
+ff00ff - EdgeNorthWest		- Top Face Immunity
+00ffff - EdgeNorthEast		- Top Face Immunity
+00ff80 - EdgeSouthWest		- Left Face Immunity
+ff8000 - EdgeSouthEast		- Right Face Immunity
+
+[FOR THE CUBE]
+ffff00 - TopFace
+00ff80 - LeftSideFace
+ff00ff - RightSideFace

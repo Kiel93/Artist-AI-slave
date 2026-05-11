@@ -1,0 +1,55 @@
+=========================================================
+MAP GENERATION WORKSPACE: AI AGENT GUIDELINES
+=========================================================
+
+This document outlines the architecture, constraints, and UI layout of the Map Generation Workspace. AI Agents modifying this workspace MUST read and adhere to these principles.
+
+1. THE LEVEL SYSTEM (ELEVATION & GRID)
+---------------------------------------------------------
+The map is constructed using a multi-level elevation system:
+- Level 1: Water/Ocean (Base level, currently unrendered/background).
+- Level 2: Island Base (The 13-tile auto-tiled ground).
+- Level 3: Objects/Environment (Trees, rocks, crates, etc. placed ON the Level 2 base).
+
+2. THE 3x3 SUB-GRID (DENSITY SYSTEM)
+---------------------------------------------------------
+To ensure compatibility with our Unity project, the object placement grid is significantly denser than the island generation grid.
+- Every single Level 2 island tile (e.g. `CenterFill`) is mathematically treated as a 3x3 grid for Level 3 objects.
+- This means 1 Island Tile = 9 Object Slots.
+- Inside `TerrainGenerator.ts`, objects are scattered into these slots using local coordinates `(lx, ly)` where `lx` and `ly` are between -1 and 1.
+- In `MapPreview.tsx`, the renderer converts these local coordinates to absolute isometric space relative to the parent tile's center.
+
+3. UI ARCHITECTURE (LEFT = LIST, RIGHT = PARAMS)
+---------------------------------------------------------
+The Editor UI is split strictly into two contextual panels controlled by the `activeSelection` state:
+- LEFT PANEL (`AssetManager.tsx`): 
+  - Purely a visual list of imported assets (Ground Tileset and Object Assets).
+  - Shows ONLY the thumbnail and name. 
+  - Clicking an item sets it as the `activeSelection`.
+  - DO NOT put sliders, dropdowns, or parameters in the left panel.
+
+- RIGHT PANEL (`ParameterUI.tsx`):
+  - Highly contextual based on what the user selected on the left.
+  - If `map` is selected -> Shows global dimensions and noise seeds.
+  - If `object` is selected -> Shows the specific object's parameters (Amount, Placement Rule, Scale).
+  - Always add new configurable properties (like density, rotation, elevation offset) to the RIGHT panel.
+
+4. OBJECT ASSET DATA STRUCTURE
+---------------------------------------------------------
+When adding new properties to generated assets, update the `ObjectAsset` interface in `MapGeneratorWorkspace.tsx`:
+interface ObjectAsset {
+  id: string;          // Unique instance ID
+  taskId: string;      // Source workspace
+  taskName: string;
+  nodeId: string;      // Specific node reference
+  nodePrompt: string;  // Generation prompt
+  imageUrl: string;    // Base64 or URL
+  amount: number;      // How many to scatter
+  allowOnEdge: boolean;// Placement rule toggle
+  scale: number;       // Visual scale multiplier (0.1x to 3.0x)
+}
+
+5. RULES FOR NEW FEATURES
+---------------------------------------------------------
+- If you are adding a new object property, it MUST be editable via the right panel (`ParameterUI.tsx`), saved to the `idb-keyval` database via `store.ts`, and applied in `MapPreview.tsx`.
+- Never bypass the 3x3 slot system for random placement. All objects must snap to one of the 9 sub-slots of a valid tile to ensure perfect Unity Tilemap exports later.

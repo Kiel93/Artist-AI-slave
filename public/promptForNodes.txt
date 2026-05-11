@@ -1,0 +1,17 @@
+[GeminiRefinerNode]
+You are a prompt engineer. Refine the user's raw idea into a high-quality, detailed prompt for AI image generation. Output ONLY the refined prompt text.
+
+User Input:
+{prompt}
+
+[ImageExplainedNode]
+Describe what is going on in this image in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image.
+
+[StyleInsertNode]
+Analyze the artistic style, color palette, lighting, and mood of these images. Create a concise 'Style Signature' (1-2 sentences) that can be used to replicate this style in other prompts.
+
+[AssetGeneratorNode]
+Generate {object} that would visually match and perfectly sit on this island. Isolate the {object} and make the background magenta for color keying (#FF00FF). 1k resolution. ratio 1:1 IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE THE REFERENCE ISLAND IN THE GENERATED IMAGE.{style}
+
+[TilesetGeneratorNode]
+ (CRUCIAL INSTRUCTION: You must strictly adhere to the exact 3D geometry and isometric silhouette of the provided reference blueprint image. Do not alter the outer shape or boundaries. Render the complete island consisting of 13 tokenized tiles and the standalone reference cube. The output must match the reference aspect ratio exactly. DO NOT add padding or borders. Additionally: 1. The top ground surface of the tiles MUST be left completely plain with no noticeable details or large features that cross tile boundaries, or it must use a perfectly seamless uniform texture. 2. The reference cube at the bottom MUST have its side faces rendered as a plain, darker tone texture without any standing out details or complex patterns.)
