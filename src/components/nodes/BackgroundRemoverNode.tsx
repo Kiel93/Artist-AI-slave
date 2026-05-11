@@ -119,7 +119,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
         </div>
       </div>
 
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#f59e0b] !border-none !left-[-8px]" style={{ top: '50%' }} />
+      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '50%' }} />
       <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" style={{ top: '50%' }} />
     </div>
   );

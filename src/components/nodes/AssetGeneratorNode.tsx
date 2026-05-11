@@ -146,7 +146,7 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
 
     let styleInput = "";
     let inputImageUrl = "";
-
+    let secondaryImageUrl = "";
     incomingEdges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
@@ -159,6 +159,9 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
       }
       if (edge.targetHandle === 'image') {
         inputImageUrl = sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+      }
+      if (edge.targetHandle === 'image-2') {
+        secondaryImageUrl = sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
       }
     });
 
@@ -224,12 +227,33 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
         throw new Error("Failed to upload base image.");
       }
 
+      const refs = [additionalReferenceUrl];
+      
+      if (secondaryImageUrl) {
+        if (secondaryImageUrl.startsWith('data:image/')) {
+          const up2 = await uploadMediaDirect(apiKey, secondaryImageUrl);
+          refs.push(up2.url || up2.cdn_url);
+        } else if (secondaryImageUrl.startsWith('blob:')) {
+          const imgRes = await fetch(secondaryImageUrl);
+          const blob = await imgRes.blob();
+          const reader = new FileReader();
+          const base64Data: string = await new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+          const up2 = await uploadMediaDirect(apiKey, base64Data);
+          refs.push(up2.url || up2.cdn_url);
+        } else if (secondaryImageUrl.startsWith('http')) {
+          refs.push(secondaryImageUrl);
+        }
+      }
+
       const response = await queueImageGen(apiKey, {
         prompt: apiPrompt,
         model: selectedModel,
         resolution: selectedResolution,
         aspect_ratio: "1:1",
-        references_urls: [additionalReferenceUrl]
+        references_urls: refs
       });
 
       if (response.success && response.task_id) {
@@ -298,14 +322,32 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
     <div className={`w-80 bg-[#1a1525] rounded-lg shadow-2xl transition-all duration-200 relative ${
       selected ? "border-2 border-[#fbbf24]" : "border-2 border-indigo-500/30"
     }`}>
-      <div className="bg-indigo-900/20 px-4 py-3 flex items-center justify-between border-b border-indigo-500/20 rounded-t-lg">
-        <div className="flex items-center gap-2">
-          <PenTool className="w-5 h-5 text-indigo-400" />
-          <span className="font-bold text-xs text-indigo-100 uppercase tracking-wider">Asset Gen (Chroma)</span>
-        </div>
-        {status !== 'idle' && (
+      <div className="bg-indigo-900/20 px-4 py-3 flex flex-col items-center border-b border-indigo-500/20 rounded-t-lg">
+        <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-wider text-blue-400 font-bold animate-pulse">{status}</span>
+            <PenTool className="w-5 h-5 text-indigo-400" />
+            <span className="font-bold text-xs text-indigo-100 uppercase tracking-wider">Asset Gen (Chroma)</span>
+          </div>
+          {status !== 'idle' && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-blue-400 font-bold animate-pulse">{status}</span>
+            </div>
+          )}
+        </div>
+        {resultUrl && (
+          <div className="flex gap-2 w-full mt-2">
+            <button
+              onClick={() => {
+                const a = document.createElement('a');
+                a.href = resultUrl;
+                a.download = `asset-${id}.png`;
+                a.target = '_blank';
+                a.click();
+              }}
+              className="flex-1 py-1.5 bg-gray-700/50 hover:bg-gray-600/50 border border-gray-600/50 rounded text-xs font-semibold text-gray-200 transition-colors"
+            >
+              Download PNG
+            </button>
           </div>
         )}
       </div>
@@ -484,8 +526,9 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
       </div>
 
       <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-8px]" style={{ top: '25%' }} />
-      <Handle type="target" position={Position.Left} id="style" className="!w-4 !h-4 !bg-[#ec4899] !border-none !left-[-8px]" style={{ top: '45%' }} />
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#f59e0b] !border-none !left-[-8px]" style={{ top: '65%' }} />
+      <Handle type="target" position={Position.Left} id="style" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-8px]" style={{ top: '40%' }} />
+      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '55%' }} />
+      <Handle type="target" position={Position.Left} id="image-2" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '70%' }} />
       <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
     </div>
   );

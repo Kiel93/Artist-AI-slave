@@ -40,6 +40,7 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
   const [groundAsset, setGroundAsset] = useState<MapAsset | null>(null);
   const [objectAssets, setObjectAssets] = useState<ObjectAsset[]>([]);
   const [activeSelection, setActiveSelection] = useState<SelectionState>({ type: 'map' });
+  const [replaceAssetId, setReplaceAssetId] = useState<string | null>(null);
   const [instanceOverrides, setInstanceOverrides] = useState<Record<string, InstanceOverride>>({});
   const [parameters, setParameters] = useState<MapParameters>({
     width: 20,
@@ -83,6 +84,8 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
           setObjectAssets={setObjectAssets}
           activeSelection={activeSelection}
           setActiveSelection={setActiveSelection}
+          replaceAssetId={replaceAssetId}
+          setReplaceAssetId={setReplaceAssetId}
         />
       </div>
 
@@ -117,6 +120,7 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
           objectAssets={objectAssets}
           setObjectAssets={setObjectAssets}
           activeSelection={activeSelection}
+          onRequestReplaceNode={(id) => setReplaceAssetId(id)}
         />
       </div>
     </div>

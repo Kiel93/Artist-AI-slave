@@ -294,7 +294,7 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
       </div>
 
       <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-8px]" style={{ top: '35%' }} />
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#f59e0b] !border-none !left-[-8px]" style={{ top: '65%' }} />
+      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '65%' }} />
       <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
     </div>
   );

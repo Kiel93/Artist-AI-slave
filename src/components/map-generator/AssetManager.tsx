@@ -10,6 +10,8 @@ interface AssetManagerProps {
   setObjectAssets: (assets: ObjectAsset[]) => void;
   activeSelection: SelectionState;
   setActiveSelection: (state: SelectionState) => void;
+  replaceAssetId?: string | null;
+  setReplaceAssetId?: (id: string | null) => void;
 }
 
 export default function AssetManager({ 
@@ -18,7 +20,9 @@ export default function AssetManager({
   objectAssets, 
   setObjectAssets,
   activeSelection,
-  setActiveSelection
+  setActiveSelection,
+  replaceAssetId,
+  setReplaceAssetId
 }: AssetManagerProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -29,6 +33,19 @@ export default function AssetManager({
   useEffect(() => {
     getProjects().then(setProjects);
   }, []);
+
+  useEffect(() => {
+    if (replaceAssetId) {
+      setImportType('object');
+      setIsImportModalOpen(true);
+      setError(null);
+    }
+  }, [replaceAssetId]);
+
+  const closeModal = () => {
+    setIsImportModalOpen(false);
+    if (setReplaceAssetId) setReplaceAssetId(null);
+  };
 
   const openModal = (type: 'ground' | 'object') => {
     setImportType(type);
@@ -54,7 +71,7 @@ export default function AssetManager({
         slices: hexSlicerNode.data.slices
       });
       setActiveSelection({ type: 'ground' });
-      setIsImportModalOpen(false);
+      closeModal();
     } catch (err: any) {
       setError(err.message || "Failed to import asset.");
     } finally {
@@ -69,23 +86,35 @@ export default function AssetManager({
       const imageUrl = node.data.resultUrl || node.data.imageUrl;
       if (!imageUrl) throw new Error("This node has no generated image yet.");
       
-      const newId = Math.random().toString(36).substr(2, 9);
-      const newAsset: ObjectAsset = {
-        id: newId,
-        taskId: task.id,
-        taskName: task.name,
-        nodeId: node.id,
-        nodePrompt: node.data.localPrompt || "Generated Object",
-        imageUrl,
-        amount: 5,
-        allowOnEdge: false,
-        scale: 1.0,
-        seedOffset: 0
-      };
-      
-      setObjectAssets([...objectAssets, newAsset]);
-      setActiveSelection({ type: 'object', id: newId });
-      setIsImportModalOpen(false);
+      if (replaceAssetId) {
+        setObjectAssets(objectAssets.map(a => a.id === replaceAssetId ? {
+          ...a,
+          taskId: task.id,
+          taskName: task.name,
+          nodeId: node.id,
+          nodePrompt: node.data.localPrompt || "Generated Object",
+          imageUrl
+        } : a));
+        setActiveSelection({ type: 'object', id: replaceAssetId });
+      } else {
+        const newId = Math.random().toString(36).substr(2, 9);
+        const newAsset: ObjectAsset = {
+          id: newId,
+          taskId: task.id,
+          taskName: task.name,
+          nodeId: node.id,
+          nodePrompt: node.data.localPrompt || "Generated Object",
+          imageUrl,
+          amount: 5,
+          allowOnEdge: false,
+          scale: 1.0,
+          seedOffset: 0
+        };
+        
+        setObjectAssets([...objectAssets, newAsset]);
+        setActiveSelection({ type: 'object', id: newId });
+      }
+      closeModal();
     } catch (err: any) {
       setError(err.message || "Failed to import asset.");
     } finally {
@@ -216,9 +245,9 @@ export default function AssetManager({
           <div className="bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
             <div className="p-4 border-b border-[var(--color-blender-border)] flex justify-between items-center">
               <h3 className="font-bold text-lg text-white">
-                Import {importType === 'ground' ? 'Ground Tileset' : 'Object Asset'}
+                {replaceAssetId ? 'Replace Object Asset' : `Import ${importType === 'ground' ? 'Ground Tileset' : 'Object Asset'}`}
               </h3>
-              <button onClick={() => setIsImportModalOpen(false)} className="text-gray-400 hover:text-white">✕</button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-white">✕</button>
             </div>
             
             <div className="p-4 overflow-y-auto flex-1 space-y-4">

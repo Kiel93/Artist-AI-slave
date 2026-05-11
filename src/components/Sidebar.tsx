@@ -71,9 +71,9 @@ const NODE_TYPES = [
   },
   {
     type: "assetGenerator",
-    label: "Asset Gen (Diff)",
+    label: "Asset Gen (Chroma)",
     icon: <PenTool className="w-5 h-5 text-indigo-400" />,
-    description: "Generate & extract assets via diffing",
+    description: "Generate & extract assets via chromakeying",
   },
   {
     type: "backgroundRemover",

@@ -1,4 +1,4 @@
-import { Sliders, Settings, Box, Trash2, Scaling, Dices, RefreshCw } from "lucide-react";
+import { Settings, Dices, RefreshCw, Trash2, Upload, Image as ImageIcon, Sliders, Box, Scaling } from "lucide-react";
 import { MapParameters, MapAsset, ObjectAsset, SelectionState } from "./MapGeneratorWorkspace";
 import { getTask } from "@/lib/store";
 
@@ -10,6 +10,7 @@ interface ParameterUIProps {
   objectAssets: ObjectAsset[];
   setObjectAssets: (assets: ObjectAsset[]) => void;
   activeSelection: SelectionState;
+  onRequestReplaceNode?: (assetId: string) => void;
 }
 
 export default function ParameterUI({ 
@@ -19,7 +20,8 @@ export default function ParameterUI({
   setGroundAsset,
   objectAssets,
   setObjectAssets,
-  activeSelection 
+  activeSelection,
+  onRequestReplaceNode
 }: ParameterUIProps) {
 
   const handleMapChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,6 +176,37 @@ export default function ParameterUI({
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
+              <button 
+                onClick={() => onRequestReplaceNode && onRequestReplaceNode(asset.id)} 
+                className="text-pink-400 hover:text-pink-300 p-1" 
+                title="Replace from Node"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+              <label className="text-yellow-400 hover:text-yellow-300 p-1 cursor-pointer" title="Replace with File">
+                <Upload className="w-4 h-4" />
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      if (event.target?.result) {
+                        updateObjectAsset(asset.id, { 
+                           imageUrl: event.target.result as string,
+                           taskId: 'local',
+                           nodeId: 'upload',
+                           nodePrompt: 'Local Upload'
+                        });
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
               <button onClick={() => updateObjectAsset(asset.id, { seedOffset: (asset.seedOffset || 0) + 1 })} className="text-emerald-400 hover:text-emerald-300 p-1" title="Vary Placement">
                 <Dices className="w-4 h-4" />
               </button>
