@@ -216,7 +216,7 @@ export class TerrainGenerator {
     if (objectAssets && objectAssets.length > 0) {
       const rngScatter = new SeededRandom(seed + 12345);
       
-      const validCells = [];
+      const validCells: MapGridCell[] = [];
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
           if (result[y][x].isLand && result[y][x].tileId) {
@@ -247,7 +247,7 @@ export class TerrainGenerator {
         if (!asset.amount || asset.amount <= 0) continue;
         
         // Use an isolated RNG per asset so "Vary" doesn't cascade and scramble other assets
-        const assetStrVal = Array.from(asset.id).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+        const assetStrVal = Array.from(asset.id).reduce((sum: number, char: any) => sum + char.charCodeAt(0), 0);
         const assetSeed = seed + 12345 + (asset.seedOffset || 0) * 1000 + assetStrVal;
         const assetRng = new SeededRandom(assetSeed);
 

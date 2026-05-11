@@ -76,7 +76,7 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
     const edge = allEdges.find(e => e.target === id && e.targetHandle === handleId);
     if (!edge) return null;
     const node = nodes.find(n => n.id === edge.source);
-    return node?.data.refinedText || node?.data.text || node?.data.bakedStyle || "";
+    return (node?.data as any)?.refinedText || (node?.data as any)?.text || (node?.data as any)?.bakedStyle || "";
   };
 
   // Compute final concatenated prompt

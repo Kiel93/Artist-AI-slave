@@ -251,10 +251,10 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
       try {
         const res = await getTaskStatus(apiKey, taskId);
         
-        const isDone = res.status === 'succeeded' || res.status === 'completed' || res.status === 'success' || !!res.result_url;
+        const isDone = res.status === 'succeeded' || (res.status as string) === 'completed' || (res.status as string) === 'success' || !!res.result_url;
         
-        if (isDone && (res.result_url || res.url || res.image_url)) {
-          const fetchedGenUrl = res.result_url || res.url || res.image_url;
+        if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
+          const fetchedGenUrl = res.result_url || (res as any).url || (res as any).image_url;
           setGeneratedUrl(fetchedGenUrl);
           
           setStatus("diffing");
@@ -273,8 +273,8 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
           }
 
           return true;
-        } else if (res.status === 'failed' || res.status === 'error') {
-          setError(res.error || res.message || "Generation failed.");
+        } else if (res.status === 'failed' || (res.status as string) === 'error') {
+          setError((res as any).error || (res as any).message || "Generation failed.");
           setStatus("failed");
           return true;
         }
