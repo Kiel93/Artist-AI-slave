@@ -108,7 +108,8 @@ export default function AssetManager({
           amount: 5,
           allowOnEdge: false,
           scale: 1.0,
-          seedOffset: 0
+          seedOffset: 0,
+          baseTiles: [{lx: 0, ly: 0}]
         };
         
         setObjectAssets([...objectAssets, newAsset]);
@@ -141,7 +142,8 @@ export default function AssetManager({
         amount: 5,
         allowOnEdge: false,
         scale: 1.0,
-        seedOffset: 0
+        seedOffset: 0,
+        baseTiles: [{lx: 0, ly: 0}]
       };
       setObjectAssets([...objectAssets, newAsset]);
       setActiveSelection({ type: 'object', id: newId });
@@ -274,7 +276,7 @@ export default function AssetManager({
                         </button>
                       );
                     } else {
-                      const objectNodes = task.nodes.filter(n => n.type === 'assetGenerator');
+                      const objectNodes = task.nodes.filter(n => n.data && (n.data.resultUrl || n.data.imageUrl));
                       if (objectNodes.length === 0) return null;
                       
                       return (
@@ -283,18 +285,30 @@ export default function AssetManager({
                           <div className="grid grid-cols-4 gap-2">
                             {objectNodes.map(node => {
                               const imageUrl = node.data.resultUrl || node.data.imageUrl;
+                              const isAlreadyImported = objectAssets.some(a => a.nodeId === node.id);
                               return (
                                 <button
                                   key={node.id}
                                   onClick={() => handleImportObject(task, node)}
                                   disabled={isLoading || !imageUrl}
-                                  className="aspect-square relative rounded bg-black/40 border border-transparent hover:border-indigo-500/60 hover:bg-indigo-900/40 transition-all flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+                                  className={`aspect-square relative rounded border transition-all flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${
+                                    isAlreadyImported 
+                                      ? 'bg-emerald-900/30 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' 
+                                      : 'bg-black/40 border-transparent hover:border-indigo-500/60 hover:bg-indigo-900/40'
+                                  }`}
                                 >
                                   {imageUrl ? (
                                     <img src={imageUrl} className="w-full h-full object-contain p-1" />
                                   ) : (
                                     <span className="text-[8px] text-gray-600">No Img</span>
                                   )}
+                                  
+                                  {isAlreadyImported && (
+                                    <div className="absolute top-1 right-1 bg-emerald-500 text-black rounded-full p-0.5">
+                                      <Check className="w-2.5 h-2.5" />
+                                    </div>
+                                  )}
+
                                   <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Plus className="w-4 h-4 text-white" />
                                   </div>

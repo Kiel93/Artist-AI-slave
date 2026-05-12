@@ -23,6 +23,8 @@ export interface ObjectAsset {
   allowOnEdge: boolean;
   scale: number;
   seedOffset?: number;
+  baseTiles?: {lx: number, ly: number}[];
+  gridOffset?: {x: number, y: number};
 }
 
 export interface MapParameters {
@@ -98,6 +100,7 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
             parameters={parameters} 
             instanceOverrides={instanceOverrides}
             setInstanceOverrides={setInstanceOverrides}
+            activeSelection={activeSelection}
             setParameters={(p) => {
               setParameters(p);
               setInstanceOverrides({}); // Clear overrides on map change

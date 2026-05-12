@@ -203,6 +203,90 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
       </div>
       
       <div className="p-4 space-y-3">
+        {/* Top/Middle: Handles List */}
+        <div className="flex flex-col gap-1 pb-1">
+          {(() => {
+            const handlesToRender = [
+              { id: 'text', color: '#3b82f6', isPlus: false }, // Blue for text
+              ...imageInputs.map(id => ({ id, color: '#22c55e', isPlus: false })), // Green for images
+            ];
+            
+            // Only show '+' if under 4 images
+            if (imageInputs.length < 4) {
+              handlesToRender.push({ id: 'image-plus', color: '#22c55e', isPlus: true });
+            }
+
+            return handlesToRender.map((h, i) => {
+              if (h.isPlus) {
+                return (
+                  <div key={h.id} className="relative flex items-center h-6 mt-1">
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={h.id}
+                      className="!w-5 !h-5 !bg-[#22c55e] !border-none !flex !items-center !justify-center !min-w-0 !min-h-0 cursor-crosshair hover:scale-110 transition-transform shadow-md !left-[-24px]"
+                      title="Drop wire here to add a new image input"
+                    >
+                      <span className="text-[#151b25] font-black text-lg leading-none mt-[-2px] ml-[1px]">+</span>
+                    </Handle>
+                    <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Add Image</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={h.id} className="relative flex items-center h-6">
+                  <Handle
+                    type="target"
+                    id={h.id}
+                    position={Position.Left}
+                    style={{ backgroundColor: h.color }}
+                    className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px]`}
+                  />
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">
+                    {h.id === 'text' ? 'Prompt Input' : `Reference Image`}
+                  </span>
+                </div>
+              );
+            });
+          })()}
+        </div>
+
+        {/* Model Selection UI */}
+        <div className="relative z-20">
+          <label className="text-[10px] uppercase tracking-wider text-blue-400/60 font-bold mb-1 block">Generative Model</label>
+          <button 
+            onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+            className="nodrag w-full bg-black/40 border border-blue-500/20 rounded px-3 py-2 flex items-center justify-between hover:border-blue-500/40 transition-colors"
+          >
+            <span className="text-xs text-blue-100 font-medium">
+              {MODELS.find(m => m.id === selectedModel)?.name || "Select Model"}
+            </span>
+            <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {isModelMenuOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a2230] border border-blue-500/30 rounded shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1">
+              {MODELS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setSelectedModel(m.id);
+                    setIsModelMenuOpen(false);
+                    setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, model: m.id } } : n));
+                  }}
+                  className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-blue-600/20 ${
+                    selectedModel === m.id ? 'text-blue-400 font-bold bg-blue-600/10' : 'text-blue-100/70'
+                  }`}
+                >
+                  {m.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        {/* Bottom Panel: Image Preview */}
         <div className="w-full aspect-square bg-black/50 border border-blue-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative">
           {resultUrl ? (
             <img src={resultUrl} className="w-full h-full object-contain" alt="generated" />
@@ -227,40 +311,7 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
           )}
         </div>
 
-        {/* Model Selection UI */}
-        <div className="relative">
-          <label className="text-[10px] uppercase tracking-wider text-blue-400/60 font-bold mb-1 block">Generative Model</label>
-          <button 
-            onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-            className="nodrag w-full bg-black/40 border border-blue-500/20 rounded px-3 py-2 flex items-center justify-between hover:border-blue-500/40 transition-colors"
-          >
-            <span className="text-xs text-blue-100 font-medium">
-              {MODELS.find(m => m.id === selectedModel)?.name || "Select Model"}
-            </span>
-            <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${isModelMenuOpen ? 'rotate-180' : ''}`} />
-          </button>
-          
-          {isModelMenuOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a2230] border border-blue-500/30 rounded shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1">
-              {MODELS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    setSelectedModel(m.id);
-                    setIsModelMenuOpen(false);
-                    setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, model: m.id } } : n));
-                  }}
-                  className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-blue-600/20 ${
-                    selectedModel === m.id ? 'text-blue-400 font-bold bg-blue-600/10' : 'text-blue-100/70'
-                  }`}
-                >
-                  {m.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        
+        {/* Action Buttons */}
         <div className="flex gap-2">
           <button 
             onClick={generateImage}
@@ -282,53 +333,6 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
           )}
         </div>
       </div>
-
-      {/* Handles Container */}
-      {(() => {
-        const handlesToRender = [
-          { id: 'text', color: '#3b82f6', isPlus: false }, // Blue for text
-          ...imageInputs.map(id => ({ id, color: '#22c55e', isPlus: false })), // Green for images
-        ];
-        
-        // Only show '+' if under 4 images
-        if (imageInputs.length < 4) {
-          handlesToRender.push({ id: 'image-plus', color: '#22c55e', isPlus: true });
-        }
-
-        const startY = 80; // pixels from top (below header)
-        const rangeY = 280; // span of the image area height
-        
-        return handlesToRender.map((h, i) => {
-          const topPos = startY + (i * (rangeY / Math.max(1, handlesToRender.length - 1)));
-          
-          if (h.isPlus) {
-            return (
-              <Handle
-                key={h.id}
-                type="target"
-                position={Position.Left}
-                id={h.id}
-                className="!w-5 !h-5 !bg-[#22c55e] !border-none !flex !items-center !justify-center !min-w-0 !min-h-0 cursor-crosshair hover:scale-110 transition-transform shadow-md !left-[-12px]"
-                title="Drop wire here to add a new image input"
-                style={{ top: `${topPos}px`, transform: 'translateY(-50%)' }}
-              >
-                <span className="text-[#151b25] font-black text-lg leading-none mt-[-2px] ml-[1px]">+</span>
-              </Handle>
-            );
-          }
-
-          return (
-            <Handle
-              key={h.id}
-              type="target"
-              id={h.id}
-              position={Position.Left}
-              style={{ top: `${topPos}px`, transform: 'translateY(-50%)', backgroundColor: h.color }}
-              className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-8px]`}
-            />
-          );
-        });
-      })()}
     </div>
   );
 }

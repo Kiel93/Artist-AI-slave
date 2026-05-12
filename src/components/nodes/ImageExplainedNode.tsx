@@ -164,17 +164,17 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
         })}
 
         {/* The "+" Spawner Handle */}
-        <div className="relative h-6 mt-2">
+        <div className="relative flex items-center h-6 mt-2">
           <Handle
             type="target"
             position={Position.Left}
             id="image-plus"
             className="!w-5 !h-5 !bg-[#22c55e] !border-none !flex !items-center !justify-center !min-w-0 !min-h-0 !left-[-24px] cursor-crosshair hover:scale-110 transition-transform shadow-md"
-            style={{ top: '50%', transform: 'translateY(-50%)' }}
             title="Drop wire here to add a new image input"
           >
             <span className="text-[#1a1525] font-black text-lg leading-none mt-[-2px] ml-[1px]">+</span>
           </Handle>
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Add Image</span>
         </div>
 
         {/* Raw Request Toggle */}

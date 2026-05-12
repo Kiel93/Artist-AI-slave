@@ -124,8 +124,35 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
             }
           }
           
+          let minX = w, minY = h, maxX = 0, maxY = 0;
+          let hasVisiblePixels = false;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const idx = (y * w + x) * 4;
+              if (defringedData[idx+3] > 0) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+                hasVisiblePixels = true;
+              }
+            }
+          }
+
           ctx.putImageData(new ImageData(defringedData, w, h), 0, 0);
-          resolve(canvas.toDataURL("image/png"));
+
+          if (hasVisiblePixels) {
+            const trimmedW = maxX - minX + 1;
+            const trimmedH = maxY - minY + 1;
+            const trimmedCanvas = document.createElement("canvas");
+            trimmedCanvas.width = trimmedW;
+            trimmedCanvas.height = trimmedH;
+            const trimmedCtx = trimmedCanvas.getContext("2d")!;
+            trimmedCtx.drawImage(canvas, minX, minY, trimmedW, trimmedH, 0, 0, trimmedW, trimmedH);
+            resolve(trimmedCanvas.toDataURL("image/png"));
+          } else {
+            resolve(canvas.toDataURL("image/png"));
+          }
         } catch (e) {
           reject(e);
         }
@@ -176,7 +203,13 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
     
     let baseApiPrompt = await fetchNodePrompt('AssetGeneratorNode');
     if (!baseApiPrompt) {
-      baseApiPrompt = "Generate {object} that would perfectly match this island. Isolate the {object} and make the background magenta for color keying (#FF00FF). 1k resolution. ratio 1:1 IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING.{style}";
+      baseApiPrompt = `You are an artist in the game industry. Generate {object} that would visually match and perfectly sit in the middle of this island. Isolate the {object} and make the background magenta for color keying (#FF00FF). IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE COMPONENTS FROM REFERENCE IN THE GENERATED IMAGE. USE THe IMAGE 2 AS REFERENCE FOR THE {object}.
+Subject: A single isolated {object} rendered in a strict 30-degree isometric perspective.
+Style: {style}
+Composition: The {object} must be centered, filling 70% of the canvas. DO NOT include the island base or any terrain from the reference image. Generate the {object} as a standalone floating sprite.
+Technical Output: Place the object on a solid, flat magenta background (#FF00FF). IMPORTANT: Ensure there are no ground shadows, no floor planes, and no "color spill" or magenta glow reflected onto the object. The edges must be sharp and clean for pixel extraction.
+Reference: {reference image}.
+Spec: resolution:{resolution}. ratio 1:1.`;
     }
     
     const apiPrompt = baseApiPrompt
@@ -334,32 +367,34 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
             </div>
           )}
         </div>
-        {resultUrl && (
-          <div className="flex gap-2 w-full mt-2">
-            <button
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = resultUrl;
-                a.download = `asset-${id}.png`;
-                a.target = '_blank';
-                a.click();
-              }}
-              className="flex-1 py-1.5 bg-gray-700/50 hover:bg-gray-600/50 border border-gray-600/50 rounded text-xs font-semibold text-gray-200 transition-colors"
-            >
-              Download PNG
-            </button>
-          </div>
-        )}
       </div>
       
       <div className="p-4 space-y-3">
-        <textarea
-          className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
-          placeholder="e.g. 'A wooden crate', 'A patch of green grass'"
-          rows={2}
-          value={localPrompt}
-          onChange={(e) => setLocalPrompt(e.target.value)}
-        />
+        <div className="relative">
+          <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
+          <textarea
+            className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
+            placeholder="e.g. 'A wooden crate', 'A patch of green grass'"
+            rows={2}
+            value={localPrompt}
+            onChange={(e) => setLocalPrompt(e.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+           <div className="relative flex items-center h-6">
+             <Handle type="target" position={Position.Left} id="style" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px]" />
+             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Style Input</span>
+           </div>
+           <div className="relative flex items-center h-6">
+             <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Base Island Image</span>
+           </div>
+           <div className="relative flex items-center h-6">
+             <Handle type="target" position={Position.Left} id="image-2" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Reference Image</span>
+           </div>
+        </div>
 
         <div className="space-y-1">
           <div className="flex justify-between items-center">
@@ -513,22 +548,32 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
           )}
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-2">
           <button 
             onClick={generateAsset}
             disabled={status !== 'idle' && status !== 'succeeded' && status !== 'failed'}
-            className="nodrag w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded shadow-lg flex items-center justify-center gap-1 disabled:opacity-50 transition-all"
           >
-            <Play className="w-4 h-4 fill-current" />
+            <Play className="w-3 h-3 fill-current" />
             GENERATE & EXTRACT
           </button>
+          {resultUrl && (
+            <button
+              onClick={() => {
+                const a = document.createElement('a');
+                a.href = resultUrl;
+                a.download = `asset-${id}.png`;
+                a.target = '_blank';
+                a.click();
+              }}
+              className="nodrag flex-1 py-2 bg-gray-700/80 hover:bg-gray-600 border border-gray-500/50 text-white text-xs font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-1"
+            >
+              DOWNLOAD PNG
+            </button>
+          )}
         </div>
       </div>
 
-      <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-8px]" style={{ top: '25%' }} />
-      <Handle type="target" position={Position.Left} id="style" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-8px]" style={{ top: '40%' }} />
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '55%' }} />
-      <Handle type="target" position={Position.Left} id="image-2" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '70%' }} />
       <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
     </div>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, PointerEvent } from "react";
-import { MapAsset, ObjectAsset, MapParameters, InstanceOverride } from "./MapGeneratorWorkspace";
+import { MapAsset, ObjectAsset, MapParameters, InstanceOverride, SelectionState } from "./MapGeneratorWorkspace";
 import { TerrainGenerator, MapGridCell, PlacedObject } from "@/lib/map-engine/TerrainGenerator";
-import { Loader2 } from "lucide-react";
+import { Loader2, Grid3X3, AlertTriangle } from "lucide-react";
 
 interface MapPreviewProps {
   groundAsset: MapAsset | null;
@@ -10,6 +10,7 @@ interface MapPreviewProps {
   instanceOverrides: Record<string, InstanceOverride>;
   setInstanceOverrides: React.Dispatch<React.SetStateAction<Record<string, InstanceOverride>>>;
   setParameters: (p: MapParameters) => void;
+  activeSelection?: SelectionState;
 }
 
 export default function MapPreview({ 
@@ -18,7 +19,8 @@ export default function MapPreview({
   parameters, 
   instanceOverrides, 
   setInstanceOverrides,
-  setParameters
+  setParameters,
+  activeSelection
 }: MapPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -27,6 +29,8 @@ export default function MapPreview({
   const [images, setImages] = useState<Record<string, HTMLImageElement>>({});
   const [isRendering, setIsRendering] = useState(false);
   const [zoomMultiplier, setZoomMultiplier] = useState(1);
+  const [showGrid, setShowGrid] = useState(false);
+  const [hasClippingAlert, setHasClippingAlert] = useState(false);
 
   const [draggedInstance, setDraggedInstance] = useState<string | null>(null);
   const [dragSlot, setDragSlot] = useState<InstanceOverride | null>(null);
@@ -35,6 +39,8 @@ export default function MapPreview({
   const transformRef = useRef({ offsetX: 0, offsetY: 0, finalScale: 1 });
   // Keep track of rendered objects for hit testing
   const renderedObjectsRef = useRef<{instanceId: string, isoX: number, isoY: number, hitRadius: number}[]>([]);
+  // Keep track of occupancy for grid rendering
+  const occupancyRef = useRef<Map<string, string[]>>(new Map());
 
   // Generate grid when parameters or overrides change
   useEffect(() => {
@@ -73,6 +79,35 @@ export default function MapPreview({
         });
       }
     }
+
+    // Check for clipping
+    let isClipping = false;
+    const occupancy = new Map<string, string[]>();
+    for (let y = 0; y < parameters.height; y++) {
+      for (let x = 0; x < parameters.width; x++) {
+        for (const obj of rawGrid[y][x].objects) {
+          const assetInfo = objectAssets?.find(a => a.id === obj.id);
+          const limit = Math.floor(1.5 * (assetInfo?.scale || 1.0));
+          const rawBaseTiles = obj.baseTiles || [{lx: 0, ly: 0}];
+          let baseTiles = rawBaseTiles.filter((t: {lx: number, ly: number}) => Math.abs(t.lx) <= limit && Math.abs(t.ly) <= limit);
+          if (baseTiles.length === 0) baseTiles = [{lx: 0, ly: 0}];
+          
+          for (const tile of baseTiles) {
+             const gx = x * 3 + obj.lx + tile.lx + 1;
+             const gy = y * 3 + obj.ly + tile.ly + 1;
+             const key = `${gx},${gy}`;
+             if (occupancy.has(key)) {
+               isClipping = true;
+               occupancy.get(key)!.push(obj.id);
+             } else {
+               occupancy.set(key, [obj.id]);
+             }
+          }
+        }
+      }
+    }
+    occupancyRef.current = occupancy;
+    setHasClippingAlert(isClipping);
     setGrid(rawGrid);
   }, [parameters, objectAssets, instanceOverrides, draggedInstance, dragSlot]);
 
@@ -190,6 +225,7 @@ export default function MapPreview({
         if (grid[row][col].isLand && grid[row][col].tileId) {
           cellsToRender.push({
             ...grid[row][col],
+            col, row,
             isoX: (col - row) * tileHalfWidth,
             isoY: (col + row) * tileHalfHeight,
             depth: row + col
@@ -200,16 +236,76 @@ export default function MapPreview({
 
     cellsToRender.sort((a, b) => a.depth - b.depth);
 
+    const objectsToRender: any[] = [];
+
+    // PASS 1: Draw Ground and Grid
     for (const cell of cellsToRender) {
       const img = images[cell.tileId!];
       if (img) {
         ctx.drawImage(img, cell.isoX - tileHalfWidth, cell.isoY - tileHalfHeight, 280, 280);
       }
 
-      if (cell.objects && cell.objects.length > 0) {
-        const sortedObjects = [...cell.objects].sort((a, b) => (a.lx + a.ly) - (b.lx + b.ly));
+      if (showGrid) {
+        ctx.save();
         
-        for (const obj of sortedObjects) {
+        // Draw occupied slots
+        for (let lx = -1; lx <= 1; lx++) {
+          for (let ly = -1; ly <= 1; ly++) {
+            const gx = cell.col * 3 + lx + 1;
+            const gy = cell.row * 3 + ly + 1;
+            const key = `${gx},${gy}`;
+            
+            const occupants = occupancyRef.current?.get(key);
+            if (occupants && occupants.length > 0) {
+              const isSelected = activeSelection?.type === 'object' && occupants.includes(activeSelection.id!);
+              ctx.fillStyle = isSelected ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)";
+              
+              const slotIsoX = cell.isoX + (lx - ly) * (140 / 3);
+              const slotIsoY = cell.isoY + (lx + ly) * (70 / 3);
+              
+              ctx.beginPath();
+              ctx.moveTo(slotIsoX, slotIsoY - 70/3);
+              ctx.lineTo(slotIsoX + 140/3, slotIsoY);
+              ctx.lineTo(slotIsoX, slotIsoY + 70/3);
+              ctx.lineTo(slotIsoX - 140/3, slotIsoY);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+        }
+        
+        ctx.beginPath();
+        
+        // Draw the 3x3 subgrid lines (9 cells)
+        for (let i = -1.5; i <= 1.5; i += 1) {
+          // Lines varying ly (constant lx = i)
+          const startX1 = cell.isoX + (i + 1.5) * (140 / 3);
+          const startY1 = cell.isoY + (i - 1.5) * (70 / 3);
+          const endX1 = cell.isoX + (i - 1.5) * (140 / 3);
+          const endY1 = cell.isoY + (i + 1.5) * (70 / 3);
+          
+          ctx.moveTo(startX1, startY1);
+          ctx.lineTo(endX1, endY1);
+
+          // Lines varying lx (constant ly = i)
+          const startX2 = cell.isoX + (-1.5 - i) * (140 / 3);
+          const startY2 = cell.isoY + (-1.5 + i) * (70 / 3);
+          const endX2 = cell.isoX + (1.5 - i) * (140 / 3);
+          const endY2 = cell.isoY + (1.5 + i) * (70 / 3);
+
+          ctx.moveTo(startX2, startY2);
+          ctx.lineTo(endX2, endY2);
+        }
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Collect objects
+      if (cell.objects && cell.objects.length > 0) {
+        for (const obj of cell.objects) {
           const objImg = images[obj.id];
           const assetInfo = objectAssets?.find(a => a.id === obj.id);
           
@@ -229,28 +325,53 @@ export default function MapPreview({
               objW = 140 * aspectRatio * scale;
             }
             
-            // Draw object
-            ctx.save();
-            if (draggedInstance === obj.instanceId) {
-              ctx.globalAlpha = 0.7; // Ghost effect when dragging
-            }
-            ctx.drawImage(objImg, slotIsoX - objW/2, slotIsoY - objH, objW, objH);
-            ctx.restore();
+            const gridOffsetX = assetInfo.gridOffset?.x || 0;
+            const gridOffsetY = assetInfo.gridOffset?.y || 0;
+            const imgCenterX = slotIsoX - gridOffsetX * scale;
+            const imgBottomY = slotIsoY - gridOffsetY * scale;
 
-            // Save hit-test data
-            renderedObjectsRef.current.push({
-              instanceId: obj.instanceId,
-              isoX: slotIsoX,
-              isoY: slotIsoY - objH / 2, // Shift hit center up to the middle of the sprite
-              hitRadius: 80 * scale
+            // Global depth of the object based on exact slot coordinates
+            const globalGx = cell.col * 3 + obj.lx + 1;
+            const globalGy = cell.row * 3 + obj.ly + 1;
+            const exactDepth = globalGx + globalGy;
+
+            objectsToRender.push({
+              ...obj,
+              objImg,
+              objW,
+              objH,
+              imgCenterX,
+              imgBottomY,
+              exactDepth,
+              scale
             });
           }
         }
       }
     }
 
+    // PASS 2: Draw Objects sorted by exact depth
+    objectsToRender.sort((a, b) => a.exactDepth - b.exactDepth);
+
+    for (const obj of objectsToRender) {
+      ctx.save();
+      if (draggedInstance === obj.instanceId) {
+        ctx.globalAlpha = 0.7; // Ghost effect when dragging
+      }
+      ctx.drawImage(obj.objImg, obj.imgCenterX - obj.objW/2, obj.imgBottomY - obj.objH, obj.objW, obj.objH);
+      ctx.restore();
+
+      // Save hit-test data
+      renderedObjectsRef.current.push({
+        instanceId: obj.instanceId,
+        isoX: obj.imgCenterX,
+        isoY: obj.imgBottomY - obj.objH / 2, // Shift hit center up to the middle of the sprite
+        hitRadius: 80 * obj.scale
+      });
+    }
+
     ctx.restore();
-  }, [grid, images, zoomMultiplier, draggedInstance]);
+  }, [grid, images, zoomMultiplier, draggedInstance, showGrid]);
 
   // Interactivity Handlers
   const handlePointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
@@ -349,6 +470,26 @@ export default function MapPreview({
             });
           }}
         />
+      )}
+      
+      {groundAsset && (
+        <button
+          onClick={() => setShowGrid(!showGrid)}
+          className={`absolute bottom-4 right-4 p-3 rounded-full shadow-lg transition-all z-10 ${showGrid ? 'bg-indigo-600 text-white' : 'bg-[var(--color-blender-panel)] text-gray-400 hover:text-white border border-[var(--color-blender-border)]'}`}
+          title="Toggle Grid"
+        >
+          <Grid3X3 className="w-5 h-5" />
+        </button>
+      )}
+
+      {hasClippingAlert && (
+        <div className="absolute top-4 left-4 bg-red-900/80 text-red-200 px-3 py-2 rounded-lg flex items-center gap-2 shadow-xl border border-red-500/50 backdrop-blur-sm z-10">
+          <AlertTriangle className="w-5 h-5 text-red-400" />
+          <div className="flex flex-col">
+            <span className="text-sm font-bold">Assets Clipping</span>
+            <span className="text-xs opacity-80">Some object footprints are overlapping.</span>
+          </div>
+        </div>
       )}
     </div>
   );

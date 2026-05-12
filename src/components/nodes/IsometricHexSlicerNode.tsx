@@ -370,9 +370,13 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
           <Scissors className="w-4 h-4 fill-current" />
           SLICE 13 TILES
         </button>
+
+        <div className="relative flex items-center h-6 mt-2">
+          <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Tileset Image Input</span>
+        </div>
       </div>
 
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" />
       <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
     </div>
   );

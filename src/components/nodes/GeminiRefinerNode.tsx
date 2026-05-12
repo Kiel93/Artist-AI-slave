@@ -106,23 +106,28 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
         >
           {isRefining ? "Polishing..." : "REFINE PROMPT"}
         </button>
-      </div>
 
-      {/* Inputs */}
-      <Handle
-        type="target"
-        id="text"
-        position={Position.Left}
-        style={{ top: '30%' }}
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0"
-      />
-      <Handle
-        type="target"
-        id="image"
-        position={Position.Left}
-        style={{ top: '70%' }}
-        className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0"
-      />
+        <div className="flex flex-col gap-1 pt-2 border-t border-purple-500/20">
+          <div className="relative flex items-center h-6">
+            <Handle
+              type="target"
+              id="text"
+              position={Position.Left}
+              className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !left-[-24px]"
+            />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Prompt Input</span>
+          </div>
+          <div className="relative flex items-center h-6">
+            <Handle
+              type="target"
+              id="image"
+              position={Position.Left}
+              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
+            />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Reference Image</span>
+          </div>
+        </div>
+      </div>
 
       {/* Output */}
       <Handle

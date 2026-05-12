@@ -6,6 +6,7 @@ export interface PlacedObject {
   cellY: number;
   lx: number;
   ly: number;
+  baseTiles?: {lx: number, ly: number}[];
 }
 
 export interface MapGridCell {
@@ -216,60 +217,84 @@ export class TerrainGenerator {
     if (objectAssets && objectAssets.length > 0) {
       const rngScatter = new SeededRandom(seed + 12345);
       
-      const validCells: MapGridCell[] = [];
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          if (result[y][x].isLand && result[y][x].tileId) {
-            validCells.push(result[y][x]);
-          }
-        }
-      }
+      const occupancy = new Set<string>();
 
-      // Build 3x3 sub-slots for each valid cell
-      const buildAvailableSlots = (filterCenterOnly: boolean) => {
-        const slots: { cell: MapGridCell, lx: number, ly: number }[] = [];
-        for (const cell of validCells) {
-          if (filterCenterOnly && cell.tileId !== 'CenterFill') continue;
-          for (let lx = -1; lx <= 1; lx++) {
-            for (let ly = -1; ly <= 1; ly++) {
-              // Ensure we don't pick slots already occupied
-              const isOccupied = cell.objects.some(o => o.lx === lx && o.ly === ly);
-              if (!isOccupied) {
-                slots.push({ cell, lx, ly });
-              }
-            }
-          }
-        }
-        return slots;
+      const isSlotValid = (gx: number, gy: number, filterCenterOnly: boolean) => {
+        const cx = Math.floor(gx / 3);
+        const cy = Math.floor(gy / 3);
+        if (cy < 0 || cy >= height || cx < 0 || cx >= width) return false;
+        const cell = result[cy][cx];
+        if (!cell || !cell.isLand || !cell.tileId) return false;
+        if (filterCenterOnly && cell.tileId !== 'CenterFill') return false;
+        return !occupancy.has(`${gx},${gy}`);
       };
 
       for (const asset of objectAssets) {
         if (!asset.amount || asset.amount <= 0) continue;
+        const rawBaseTiles = asset.baseTiles && asset.baseTiles.length > 0 ? asset.baseTiles : [{lx: 0, ly: 0}];
+        const limit = Math.floor(1.5 * (asset.scale || 1.0));
+        let baseTiles = rawBaseTiles.filter((t: {lx: number, ly: number}) => Math.abs(t.lx) <= limit && Math.abs(t.ly) <= limit);
+        if (baseTiles.length === 0) baseTiles = [{lx: 0, ly: 0}];
         
         // Use an isolated RNG per asset so "Vary" doesn't cascade and scramble other assets
         const assetStrVal = Array.from(asset.id).reduce((sum: number, char: any) => sum + char.charCodeAt(0), 0);
         const assetSeed = seed + 12345 + (asset.seedOffset || 0) * 1000 + assetStrVal;
         const assetRng = new SeededRandom(assetSeed);
 
-        const availableSlots = buildAvailableSlots(!asset.allowOnEdge);
-        if (availableSlots.length === 0) continue;
+        const availablePositions: {gx: number, gy: number}[] = [];
+        
+        for (let gy = 0; gy < height * 3; gy++) {
+          for (let gx = 0; gx < width * 3; gx++) {
+             let canPlace = true;
+             for (const tile of baseTiles) {
+               const tgx = gx + tile.lx;
+               const tgy = gy + tile.ly;
+               if (!isSlotValid(tgx, tgy, !asset.allowOnEdge)) {
+                 canPlace = false;
+                 break;
+               }
+             }
+             if (canPlace) availablePositions.push({gx, gy});
+          }
+        }
 
         let placed = 0;
-        while (placed < asset.amount && availableSlots.length > 0) {
-          const randIdx = Math.floor(assetRng.next() * availableSlots.length);
-          // Extract the slot
-          const slot = availableSlots.splice(randIdx, 1)[0];
+        while (placed < asset.amount && availablePositions.length > 0) {
+          const randIdx = Math.floor(assetRng.next() * availablePositions.length);
+          const pos = availablePositions[randIdx];
           
-          slot.cell.objects.push({ 
-            url: asset.imageUrl, 
-            id: asset.id, 
-            instanceId: `${asset.id}-${placed}`,
-            cellX: slot.cell.x,
-            cellY: slot.cell.y,
-            lx: slot.lx, 
-            ly: slot.ly 
-          });
-          placed++;
+          let stillValid = true;
+          for (const tile of baseTiles) {
+             if (occupancy.has(`${pos.gx + tile.lx},${pos.gy + tile.ly}`)) {
+               stillValid = false;
+               break;
+             }
+          }
+          
+          if (stillValid) {
+             const cx = Math.floor(pos.gx / 3);
+             const cy = Math.floor(pos.gy / 3);
+             const lx = pos.gx - cx * 3 - 1;
+             const ly = pos.gy - cy * 3 - 1;
+             
+             result[cy][cx].objects.push({ 
+               url: asset.imageUrl, 
+               id: asset.id, 
+               instanceId: `${asset.id}-${placed}`,
+               cellX: cx,
+               cellY: cy,
+               lx: lx, 
+               ly: ly,
+               baseTiles: baseTiles
+             });
+
+             for (const tile of baseTiles) {
+               occupancy.add(`${pos.gx + tile.lx},${pos.gy + tile.ly}`);
+             }
+             placed++;
+          }
+          
+          availablePositions.splice(randIdx, 1);
         }
       }
     }

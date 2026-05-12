@@ -16,6 +16,12 @@ Consistency in color helps users identify data types at a glance:
 
 ## 2. Layout & Content Standards
 
+### Vertical Layout Order
+*   **Top Panel**: Reserved for the main prompt (text boxes or text handles).
+*   **Middle Panel**: Reserved for secondary settings, dropdowns, sliders, or additional input handles.
+*   **Bottom Panel**: Reserved for the image preview, placed directly above the action buttons.
+*   **Action Buttons**: Placed at the very bottom of the node.
+
 ### The "No Scrollbar" Rule
 *   All text-based nodes MUST NOT use internal scrollbars. 
 *   Text boxes should be **expandable** and grow vertically to fit their content. Avoid `overflow-y-auto` or `line-clamp` on primary content.
@@ -46,9 +52,16 @@ For nodes that act as "Connectors" or "Analyzers" and can take multiple inputs:
 3.  **Logic**: `Canvas.tsx` listens for connections to these handles. When triggered, it generates a new unique ID (e.g., `text-dyn-1234`) and adds it to the node's `data` (e.g., `data.handles` or `data.imageInputs`).
 4.  **Auto-Cleanup**: Nodes should monitor their connections via `useEdges` and remove dynamic handles that are no longer connected and haven't been "ever used."
 
+## 4. Handle Labels & Context
+For any node that receives input data via Target handles, the purpose of each handle MUST be clearly labeled within the node UI if it is not immediately obvious (e.g. adjacent to an input box where the connection implies the input value). 
+*   **Alignment**: The text label or input box should vertically align with its corresponding handle on the left edge.
+*   **Format**: Use small, muted text (e.g. `text-xs text-gray-400`) next to the handle indicating the expected input context, such as "Reference Image", "Style Image", or "Island Image".
+*   **Placement**: Place the label inside the node container, flush left against the padding near the handle.
+*   **Avoid Overlap**: Use standard DOM layout (e.g. flex columns) for handles with labels rather than absolute positioning across the whole node, to prevent text from overlapping image previews or other elements.
+
 ---
 
-## 4. State Management (Master Blueprint)
+## 5. State Management (Master Blueprint)
 Nodes in this project follow a "Master Blueprint" pattern:
 
 *   **Reactive Data**: Nodes should primarily drive their UI from the `data` prop.

@@ -200,14 +200,21 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
       </div>
       
       <div className="p-4 space-y-3">
-        {/* Prompt Input */}
-        <textarea
-          className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
-          placeholder="Enter theme (e.g., Lava rocks, glowing magma...)"
-          rows={3}
-          value={localPrompt}
-          onChange={(e) => setLocalPrompt(e.target.value)}
-        />
+        <div className="relative">
+          <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
+          <textarea
+            className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
+            placeholder="Enter theme (e.g., Lava rocks, glowing magma...)"
+            rows={3}
+            value={localPrompt}
+            onChange={(e) => setLocalPrompt(e.target.value)}
+          />
+        </div>
+
+        <div className="relative flex items-center h-6">
+          <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Blueprint Image</span>
+        </div>
 
         {/* Model Selection UI */}
         <div className="relative z-20">
@@ -293,8 +300,6 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
         </div>
       </div>
 
-      <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-8px]" style={{ top: '35%' }} />
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '65%' }} />
       <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
     </div>
   );
