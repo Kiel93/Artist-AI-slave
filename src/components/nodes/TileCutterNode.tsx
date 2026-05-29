@@ -98,7 +98,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
     const dx = e.clientX - lastMousePos.current.x;
     const dy = e.clientY - lastMousePos.current.y;
 
-    setPan(prev => ({
+    setPan((prev: { x: number; y: number }) => ({
       x: prev.x + dx,
       y: prev.y + dy
     }));
@@ -112,7 +112,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
 
   const handleWheel = (e: WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    setZoom(prev => {
+    setZoom((prev: number) => {
       const newZoom = prev - e.deltaY * 0.5;
       return Math.min(Math.max(newZoom, 100), 500);
     });

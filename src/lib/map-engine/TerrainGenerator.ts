@@ -20,6 +20,8 @@ export interface MapGridCell {
   objects: PlacedObject[];
   distance?: number;
   rawDistance?: number;
+  taperTile?: string;
+  foamTile?: string;
 }
 
 class SeededRandom {

@@ -185,7 +185,8 @@ export default function MapPreview({
       for (let y = 0; y < parameters.canvasHeight; y++) {
         depthMask[y] = [];
         for (let x = 0; x < parameters.canvasWidth; x++) {
-          depthMask[y][x] = baseGrid[y]![x]!.distance <= d;
+          const cell = baseGrid[y]?.[x];
+          depthMask[y][x] = cell ? (cell.distance || 0) <= d : false;
         }
       }
 
@@ -240,10 +241,12 @@ export default function MapPreview({
       // 3. Write back to distance map
       for (let y = 0; y < parameters.canvasHeight; y++) {
         for (let x = 0; x < parameters.canvasWidth; x++) {
-          if (!depthMask[y][x] && baseGrid[y]![x]!.distance <= d) {
-            baseGrid[y]![x]!.distance = d + 1; // Downgrade to lower depth
-          } else if (depthMask[y][x] && baseGrid[y]![x]!.distance > d) {
-            baseGrid[y]![x]!.distance = d; // Thickened to higher depth
+          const cell = baseGrid[y]?.[x];
+          if (!cell) continue;
+          if (!depthMask[y]?.[x] && (cell.distance || 0) <= d) {
+            cell.distance = d + 1; // Downgrade to lower depth
+          } else if (depthMask[y]?.[x] && (cell.distance || 0) > d) {
+            cell.distance = d; // Thickened to higher depth
           }
         }
       }
@@ -788,7 +791,7 @@ export default function MapPreview({
       } else {
         const slice = groundAsset?.slices?.find(s => s.name === ('Ground_' + cell.tileId));
         if (slice && slice.variations && slice.variations.length > 0) {
-          const seed = cell.col * 12.9898 + cell.row * 78.233 + cell.layer * 13.1313;
+          const seed = cell.col * 12.9898 + cell.row * 78.233 + (cell.layer || 0) * 13.1313;
           const rand = Math.abs(Math.sin(seed) * 43758.5453);
 
           let totalFactor = 1;
@@ -1244,7 +1247,7 @@ export default function MapPreview({
           }
         }
       } else if (activeSelection?.type === 'object' || activeSelection?.type === 'ground_variation') {
-        const id = activeSelection.id;
+        const id = activeSelection.id || '';
         const assetInfo = activeSelection.type === 'object'
           ? objectAssets?.find(a => a.id === id)
           : decalAssets?.find(a => a.id === id);
