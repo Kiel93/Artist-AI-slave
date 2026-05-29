@@ -185,7 +185,7 @@ export default function MapPreview({
       for (let y = 0; y < parameters.canvasHeight; y++) {
         depthMask[y] = [];
         for (let x = 0; x < parameters.canvasWidth; x++) {
-          depthMask[y][x] = baseGrid[y][x].distance <= d;
+          depthMask[y][x] = baseGrid[y]![x]!.distance <= d;
         }
       }
 
@@ -240,10 +240,10 @@ export default function MapPreview({
       // 3. Write back to distance map
       for (let y = 0; y < parameters.canvasHeight; y++) {
         for (let x = 0; x < parameters.canvasWidth; x++) {
-          if (!depthMask[y][x] && baseGrid[y][x].distance <= d) {
-            baseGrid[y][x].distance = d + 1; // Downgrade to lower depth
-          } else if (depthMask[y][x] && baseGrid[y][x].distance > d) {
-            baseGrid[y][x].distance = d; // Thickened to higher depth
+          if (!depthMask[y][x] && baseGrid[y]![x]!.distance <= d) {
+            baseGrid[y]![x]!.distance = d + 1; // Downgrade to lower depth
+          } else if (depthMask[y][x] && baseGrid[y]![x]!.distance > d) {
+            baseGrid[y]![x]!.distance = d; // Thickened to higher depth
           }
         }
       }
