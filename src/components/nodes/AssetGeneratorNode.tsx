@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Handle, Position, useReactFlow } from "reactflow";
 import { ImageIcon, RefreshCw, Play, AlertCircle, ChevronDown, Eye, PenTool } from "lucide-react";
 import { queueImageGen, getTaskStatus, uploadMediaDirect, fetchNodePrompt } from "@/lib/plenxai";
@@ -18,7 +18,7 @@ const RESOLUTIONS = [
 
 export default function AssetGeneratorNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "diffing" | "succeeded" | "failed">("idle");
-  const [resultUrl, setResultUrl] = useState<string | null>(data.resultUrl || null);
+  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
   const [basePreviewUrl, setBasePreviewUrl] = useState<string | null>(data.basePreviewUrl || null);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
@@ -61,14 +61,14 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
             const gDist = Math.abs(g - 0);
             const bDist = Math.abs(b - 255);
             
-            // Pass 1: Key out strict magenta (#FF00FF)
+            // Pass 1: Key out strict neon green (#00FF00)
             if (rDist < currentThreshold && gDist < currentThreshold && bDist < currentThreshold) {
               outData[i+3] = 0;
             }
           }
 
           // Pass 2: Edge Defringing (Color Bleed)
-          // Find remaining pixels that are "contaminated" by magenta
+          // Find remaining pixels that are "contaminated" by neon green
           // and replace their color with the nearest "pure" object pixel.
           const defringedData = new Uint8ClampedArray(outData);
           const radius = 3;
@@ -168,7 +168,7 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
     const edges = getEdges();
     const incomingEdges = edges.filter(e => e.target === id);
     
-    let promptParts: string[] = [];
+    const promptParts: string[] = [];
     if (localPrompt) promptParts.push(localPrompt);
 
     let styleInput = "";
@@ -178,17 +178,17 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
         if (text) promptParts.push(text);
       }
       if (edge.targetHandle === 'style') {
-        styleInput = sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        styleInput = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
       }
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        inputImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
       }
       if (edge.targetHandle === 'image-2') {
-        secondaryImageUrl = sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        secondaryImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
       }
     });
 
@@ -203,11 +203,11 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
     
     let baseApiPrompt = await fetchNodePrompt('AssetGeneratorNode');
     if (!baseApiPrompt) {
-      baseApiPrompt = `You are an artist in the game industry. Generate {object} that would visually match and perfectly sit in the middle of this island. Isolate the {object} and make the background magenta for color keying (#FF00FF). IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE COMPONENTS FROM REFERENCE IN THE GENERATED IMAGE. USE THe IMAGE 2 AS REFERENCE FOR THE {object}.
+      baseApiPrompt = `You are an artist in the game industry. Generate {object} that would visually match and perfectly sit in the middle of this island. Isolate the {object} and make the background neon green for color keying (#00FF00). IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE COMPONENTS FROM REFERENCE IN THE GENERATED IMAGE. USE THe IMAGE 2 AS REFERENCE FOR THE {object}.
 Subject: A single isolated {object} rendered in a strict 30-degree isometric perspective.
 Style: {style}
 Composition: The {object} must be centered, filling 70% of the canvas. DO NOT include the island base or any terrain from the reference image. Generate the {object} as a standalone floating sprite.
-Technical Output: Place the object on a solid, flat magenta background (#FF00FF). IMPORTANT: Ensure there are no ground shadows, no floor planes, and no "color spill" or magenta glow reflected onto the object. The edges must be sharp and clean for pixel extraction.
+Technical Output: Place the object on a solid, flat neon green background (#00FF00). IMPORTANT: Ensure there are no ground shadows, no floor planes, and no "color spill" or neon green glow reflected onto the object. The edges must be sharp and clean for pixel extraction.
 Reference: {reference image}.
 Spec: resolution:{resolution}. ratio 1:1.`;
     }
@@ -292,7 +292,7 @@ Spec: resolution:{resolution}. ratio 1:1.`;
       if (response.success && response.task_id) {
         startPolling(response.task_id, apiKey, additionalReferenceUrl);
       } else {
-        setError(response.error || "Failed to queue generation.");
+        setError(response.message || response.error || "Failed to queue generation.");
         setStatus("failed");
       }
     } catch (err: any) {
@@ -318,11 +318,11 @@ Spec: resolution:{resolution}. ratio 1:1.`;
           // Proceed to chroma key!
           try {
             const extractedAssetUrl = await performChromaKey(fetchedGenUrl, threshold);
-            setResultUrl(extractedAssetUrl);
+            setOutputImage(extractedAssetUrl);
             setStatus("succeeded");
             setNodes(nds => nds.map(n => n.id === id ? { 
               ...n, 
-              data: { ...n.data, resultUrl: extractedAssetUrl, imageUrl: extractedAssetUrl, generatedUrl: fetchedGenUrl, threshold } 
+              data: { ...n.data, outputImage: extractedAssetUrl, generatedUrl: fetchedGenUrl, threshold } 
             } : n));
           } catch (err) {
             console.error("Chroma key failed after generation:", err);
@@ -377,7 +377,10 @@ Spec: resolution:{resolution}. ratio 1:1.`;
             placeholder="e.g. 'A wooden crate', 'A patch of green grass'"
             rows={2}
             value={localPrompt}
-            onChange={(e) => setLocalPrompt(e.target.value)}
+            onChange={(e) => {
+              setLocalPrompt(e.target.value);
+              setNodes((nds) => nds.map((n) => n.id === id ? { ...n, data: { ...n.data, localPrompt: e.target.value } } : n));
+            }}
           />
         </div>
 
@@ -407,11 +410,11 @@ Spec: resolution:{resolution}. ratio 1:1.`;
                     try {
                       setStatus("diffing");
                       const extractedAssetUrl = await performChromaKey(generatedUrl, threshold);
-                      setResultUrl(extractedAssetUrl);
+                      setOutputImage(extractedAssetUrl);
                       setStatus("succeeded");
                       setNodes(nds => nds.map(n => n.id === id ? { 
                         ...n, 
-                        data: { ...n.data, resultUrl: extractedAssetUrl, imageUrl: extractedAssetUrl, threshold } 
+                        data: { ...n.data, outputImage: extractedAssetUrl, threshold } 
                       } : n));
                     } catch (err) {
                       console.error(err);
@@ -436,21 +439,20 @@ Spec: resolution:{resolution}. ratio 1:1.`;
               const newThreshold = parseInt(e.target.value);
               setThreshold(newThreshold);
               
-              // Immediately re-run chroma key if we have the images!
               if (generatedUrl) {
                 try {
                   const extractedAssetUrl = await performChromaKey(generatedUrl, newThreshold);
-                  setResultUrl(extractedAssetUrl);
+                  setOutputImage(extractedAssetUrl);
                   setNodes(nds => nds.map(n => n.id === id ? { 
                     ...n, 
-                    data: { ...n.data, resultUrl: extractedAssetUrl, imageUrl: extractedAssetUrl, threshold: newThreshold } 
+                    data: { ...n.data, outputImage: extractedAssetUrl, threshold: newThreshold } 
                   } : n));
                 } catch (err) {
                   console.error(err);
                 }
               }
             }}
-            className="nodrag w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+            className="nodrag w-full accent-indigo-500"
           />
         </div>
 
@@ -524,12 +526,12 @@ Spec: resolution:{resolution}. ratio 1:1.`;
         <div 
           className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative"
           style={{
-            backgroundImage: resultUrl ? `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)` : 'none',
+            backgroundImage: outputImage ? `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)` : 'none',
             backgroundSize: '20px 20px'
           }}
         >
-          {resultUrl ? (
-            <img src={resultUrl} className="w-full h-full object-contain drop-shadow-2xl" alt="Extracted Asset" />
+          {outputImage ? (
+            <img src={outputImage} className="w-full h-full object-contain drop-shadow-2xl" alt="Extracted Asset" />
           ) : (
             <>
               {(status === 'queueing' || status === 'polling' || status === 'diffing') ? (
@@ -557,11 +559,11 @@ Spec: resolution:{resolution}. ratio 1:1.`;
             <Play className="w-3 h-3 fill-current" />
             GENERATE & EXTRACT
           </button>
-          {resultUrl && (
+          {outputImage && (
             <button
               onClick={() => {
                 const a = document.createElement('a');
-                a.href = resultUrl;
+                a.href = outputImage;
                 a.download = `asset-${id}.png`;
                 a.target = '_blank';
                 a.click();
@@ -574,7 +576,7 @@ Spec: resolution:{resolution}. ratio 1:1.`;
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
+      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
     </div>
   );
 }

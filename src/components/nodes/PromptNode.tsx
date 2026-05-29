@@ -17,7 +17,7 @@ export default function PromptNode({ id, data, selected }: { id: string; data: a
         <textarea
           className="nodrag w-full bg-[var(--color-blender-input)] text-gray-300 text-sm border border-[var(--color-blender-border)] rounded-sm p-2 focus:outline-none focus:border-[var(--color-blender-accent)] resize-none overflow-hidden"
           placeholder="Enter prompt text..."
-          defaultValue={data.text || ""}
+          value={data.outputText || data.text || ""}
           maxLength={500}
           rows={3}
           onInput={(e: any) => {
@@ -27,7 +27,7 @@ export default function PromptNode({ id, data, selected }: { id: string; data: a
           onChange={(e) => {
             setNodes((nds) =>
               nds.map((node) =>
-                node.id === id ? { ...node, data: { ...node.data, text: e.target.value } } : node
+                node.id === id ? { ...node, data: { ...node.data, outputText: e.target.value } } : node
               )
             );
           }}
@@ -43,7 +43,7 @@ export default function PromptNode({ id, data, selected }: { id: string; data: a
         type="source"
         position={Position.Right}
         id="text"
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0"
+        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !right-[-10px]"
       />
     </div>
   );

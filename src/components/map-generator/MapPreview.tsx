@@ -6,12 +6,18 @@ import { Loader2, Grid3X3, AlertTriangle, MousePointer2, Paintbrush, Eraser, Eye
 interface MapPreviewProps {
   groundAsset: MapAsset | null;
   objectAssets: ObjectAsset[];
+  decalAssets?: any[];
   parameters: MapParameters;
   instanceOverrides: Record<string, InstanceOverride>;
   setInstanceOverrides: (overrides: Record<string, InstanceOverride> | ((prev: Record<string, InstanceOverride>) => Record<string, InstanceOverride>)) => void;
   groundOverrides: Record<string, number>;
   setGroundOverrides: (overrides: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  oceanAsset?: MapAsset | null;
   setParameters: (p: MapParameters) => void;
+  oceanOverrides?: Record<string, number>;
+  setOceanOverrides?: (overrides: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  decalOverrides?: Record<string, any>;
+  setDecalOverrides?: (overrides: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
   activeSelection?: SelectionState;
   setActiveSelection?: (s: SelectionState) => void;
   activeTool: 'select' | 'paint' | 'erase';
@@ -20,8 +26,11 @@ interface MapPreviewProps {
   setActiveLevel: (l: number) => void;
   levels: number[];
   setLevels: React.Dispatch<React.SetStateAction<number[]>>;
+  onStatsChange?: (stats: Record<string, number>) => void;
+  mapDataRef?: React.MutableRefObject<{ gridLevels: any, objectInstances: any[] }>;
 }
 
+// <label>
 export default function MapPreview({
   groundAsset,
   objectAssets,
@@ -30,7 +39,12 @@ export default function MapPreview({
   setInstanceOverrides,
   groundOverrides,
   setGroundOverrides,
+  oceanAsset,
   setParameters,
+  oceanOverrides,
+  setOceanOverrides,
+  decalOverrides,
+  setDecalOverrides,
   activeSelection,
   setActiveSelection,
   activeTool,
@@ -38,7 +52,10 @@ export default function MapPreview({
   activeLevel,
   setActiveLevel,
   levels,
-  setLevels
+  setLevels,
+  onStatsChange,
+  decalAssets,
+  mapDataRef
 }: MapPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -99,21 +116,148 @@ export default function MapPreview({
   // Keep track of render bounds for picking math
   const transformRef = useRef({ offsetX: 0, offsetY: 0, finalScale: 1 });
   // Keep track of rendered objects for hit testing
-  const renderedObjectsRef = useRef<{ id: string, instanceId: string, isoX: number, isoY: number, hitRadius: number }[]>([]);
+  const renderedObjectsRef = useRef<{ id: string, instanceId: string, isoX: number, isoY: number, objW: number, objH: number }[]>([]);
   // Keep track of occupancy for grid rendering
   const occupancyRef = useRef<Map<string, string[]>>(new Map());
 
   // Generate grid when parameters or overrides change
   useEffect(() => {
-    const rawGridLevels = TerrainGenerator.generate(parameters.width, parameters.height, parameters.seed, parameters.noiseScale, objectAssets, groundOverrides, levels);
+    const rawGridLevels = TerrainGenerator.generate(parameters.canvasWidth, parameters.canvasHeight, parameters.islandWidth, parameters.islandHeight, parameters.seed, parameters.noiseScale, objectAssets, groundOverrides, levels);
+
+    // We add a base level 0 for water plane
+    const baseGrid: MapGridCell[][] = [];
+    for (let y = 0; y < parameters.canvasHeight; y++) {
+      const row: MapGridCell[] = [];
+      for (let x = 0; x < parameters.canvasWidth; x++) {
+        // Find distance to nearest land on level 1
+        let minLandDist = Infinity;
+        if (rawGridLevels[1]) {
+          if (rawGridLevels[1][y][x].isLand) {
+            minLandDist = 0;
+          } else {
+            // Scan for nearest land (Manhattan distance / Chebyshev distance)
+            for (let ly = 0; ly < parameters.canvasHeight; ly++) {
+              for (let lx = 0; lx < parameters.canvasWidth; lx++) {
+                if (rawGridLevels[1][ly][lx].isLand) {
+                  const d = Math.max(Math.abs(lx - x), Math.abs(ly - y));
+                  if (d < minLandDist) minLandDist = d;
+                }
+              }
+            }
+          }
+        }
+
+        let mappedDist = minLandDist;
+        if (minLandDist > 0 && parameters.oceanTaperWidths) {
+          let currentD = 1;
+          let assignedLvl = 1;
+          const maxLvl = parameters.oceanTaperLevels || 0;
+          while (assignedLvl <= maxLvl) {
+            const w = parameters.oceanTaperWidths[assignedLvl] !== undefined ? parameters.oceanTaperWidths[assignedLvl] : (assignedLvl === 0 ? 0 : 1);
+            if (w > 0 && minLandDist >= currentD && minLandDist < currentD + w) {
+              mappedDist = assignedLvl;
+              break;
+            }
+            if (w > 0) currentD += w;
+            assignedLvl++;
+          }
+          if (assignedLvl > maxLvl) {
+            mappedDist = maxLvl + 1; // Beyond the last taper level
+          }
+        }
+
+        const overrideKey = `${x},${y}`;
+        if (oceanOverrides && oceanOverrides[overrideKey] !== undefined) {
+          mappedDist = oceanOverrides[overrideKey];
+        }
+
+        row.push({ x, y, isLand: false, tileId: 'CenterFill', objects: [], layer: 0, distance: mappedDist, rawDistance: minLandDist } as any);
+      }
+      baseGrid.push(row);
+    }
+
+    // --- ENFORCE CA CONSTRAINTS ON OCEAN DEPTHS ---
+    // This prevents 1x1 and 1-wide painted ocean tiles from remaining in the data
+    const maxLvl = parameters.oceanTaperLevels || 0;
+    for (let d = 1; d <= maxLvl; d++) {
+      // 1. Extract boolean mask for current depth level
+      const depthMask: boolean[][] = [];
+      for (let y = 0; y < parameters.canvasHeight; y++) {
+        depthMask[y] = [];
+        for (let x = 0; x < parameters.canvasWidth; x++) {
+          depthMask[y][x] = baseGrid[y][x].distance <= d;
+        }
+      }
+
+      // 2. Enforce standard CA constraints with double buffering
+      let changed = true;
+      let passes = 0;
+      while (changed && passes < 10) {
+        changed = false;
+        passes++;
+        const newMask = depthMask.map(row => [...row]);
+        
+        for (let y = 0; y < parameters.canvasHeight; y++) {
+          for (let x = 0; x < parameters.canvasWidth; x++) {
+            if (!depthMask[y][x]) continue;
+
+            const N = y > 0 && depthMask[y - 1][x];
+            const S = y < parameters.canvasHeight - 1 && depthMask[y + 1][x];
+            const E = x < parameters.canvasWidth - 1 && depthMask[y][x + 1];
+            const W = x > 0 && depthMask[y][x - 1];
+
+            const cardinals = (N ? 1 : 0) + (S ? 1 : 0) + (E ? 1 : 0) + (W ? 1 : 0);
+
+            if (cardinals < 2) {
+              newMask[y][x] = false;
+              changed = true;
+              continue;
+            }
+
+            if (cardinals === 2) {
+              if (N && S) {
+                if (x < parameters.canvasWidth - 1 && !newMask[y][x + 1]) {
+                  newMask[y][x + 1] = true;
+                  changed = true;
+                }
+              } else if (E && W) {
+                if (y < parameters.canvasHeight - 1 && !newMask[y + 1][x]) {
+                  newMask[y + 1][x] = true;
+                  changed = true;
+                }
+              }
+            }
+          }
+        }
+        
+        for (let y = 0; y < parameters.canvasHeight; y++) {
+          for (let x = 0; x < parameters.canvasWidth; x++) {
+            depthMask[y][x] = newMask[y][x];
+          }
+        }
+      }
+
+      // 3. Write back to distance map
+      for (let y = 0; y < parameters.canvasHeight; y++) {
+        for (let x = 0; x < parameters.canvasWidth; x++) {
+          if (!depthMask[y][x] && baseGrid[y][x].distance <= d) {
+            baseGrid[y][x].distance = d + 1; // Downgrade to lower depth
+          } else if (depthMask[y][x] && baseGrid[y][x].distance > d) {
+            baseGrid[y][x].distance = d; // Thickened to higher depth
+          }
+        }
+      }
+    }
+
+    rawGridLevels[0] = baseGrid;
 
     // Extract all procedural objects
     const allObjects: PlacedObject[] = [];
     for (const level of levels) {
       const rawGrid = rawGridLevels[level];
       if (!rawGrid) continue;
-      for (let y = 0; y < parameters.height; y++) {
-        for (let x = 0; x < parameters.width; x++) {
+      for (let y = 0; y < parameters.canvasHeight; y++) {
+        for (let x = 0; x < parameters.canvasWidth; x++) {
           allObjects.push(...rawGrid[y][x].objects);
           rawGrid[y][x].objects = []; // Clear
         }
@@ -187,13 +331,12 @@ export default function MapPreview({
     for (const level of levels) {
       const rawGrid = rawGridLevels[level];
       if (!rawGrid) continue;
-      for (let y = 0; y < parameters.height; y++) {
-        for (let x = 0; x < parameters.width; x++) {
+      for (let y = 0; y < parameters.canvasHeight; y++) {
+        for (let x = 0; x < parameters.canvasWidth; x++) {
           for (const obj of rawGrid[y][x].objects) {
             const assetInfo = objectAssets?.find(a => a.id === obj.id);
-            const limit = Math.floor(1.5 * (assetInfo?.scale || 1.0));
             const rawBaseTiles = obj.baseTiles || [{ lx: 0, ly: 0 }];
-            let baseTiles = rawBaseTiles.filter((t: { lx: number, ly: number }) => Math.abs(t.lx) <= limit && Math.abs(t.ly) <= limit);
+            let baseTiles = rawBaseTiles;
             if (baseTiles.length === 0) baseTiles = [{ lx: 0, ly: 0 }];
 
             for (const tile of baseTiles) {
@@ -214,7 +357,33 @@ export default function MapPreview({
     occupancyRef.current = occupancy;
     setHasClippingAlert(isClipping);
     setGridLevels(rawGridLevels);
-  }, [parameters, objectAssets, instanceOverrides, groundOverrides, draggedInstance, dragSlot, levels]);
+    if (mapDataRef) {
+      mapDataRef.current.gridLevels = rawGridLevels;
+    }
+
+    // Count and report stats
+    const newStats: Record<string, number> = {};
+    const finalObjects: PlacedObject[] = [];
+    for (const level of levels) {
+      const rawGrid = rawGridLevels[level];
+      if (!rawGrid) continue;
+      for (let y = 0; y < parameters.canvasHeight; y++) {
+        for (let x = 0; x < parameters.canvasWidth; x++) {
+          for (const obj of rawGrid[y][x].objects) {
+            newStats[obj.id] = (newStats[obj.id] || 0) + 1;
+            finalObjects.push(obj);
+          }
+        }
+      }
+    }
+
+    if (mapDataRef) {
+      mapDataRef.current.objectInstances = finalObjects;
+    }
+    if (onStatsChange) {
+      onStatsChange(newStats);
+    }
+  }, [parameters, objectAssets, instanceOverrides, groundOverrides, draggedInstance, dragSlot, levels, oceanOverrides]);
 
   // Load images when ground asset changes
   useEffect(() => {
@@ -226,14 +395,31 @@ export default function MapPreview({
     setIsRendering(true);
     const loadedImages: Record<string, HTMLImageElement> = {};
 
+    const oceanTileNames = [
+      'Tile_Center',
+      'Tile_Edge_NorthEast', 'Tile_Edge_NorthWest', 'Tile_Edge_SouthEast', 'Tile_Edge_SouthWest',
+      'Tile_InnerCorner_East', 'Tile_InnerCorner_North', 'Tile_InnerCorner_South', 'Tile_InnerCorner_West',
+      'Tile_OutterCorner_East', 'Tile_OutterCorner_North', 'Tile_OutterCorner_South', 'Tile_OutterCorner_West',
+      'Tile_LowerDepth'
+    ];
+    const foamTileNames = oceanTileNames.filter(name => name !== 'Tile_LowerDepth');
+
     const slicesCount = groundAsset.slices.length;
+    let variationsCount = 0;
+    groundAsset.slices.forEach(s => { variationsCount += (s.variations ? s.variations.length : 0); });
+
     let objectsCount = objectAssets ? objectAssets.length : 0;
     if (objectAssets) {
       objectAssets.forEach(asset => {
         if (asset.shadowEnabled && asset.shadowImageUrl) objectsCount++;
       });
     }
-    const totalCount = slicesCount + objectsCount;
+
+    const maskCount = (parameters.oceanTaperLevels > 0) ? oceanTileNames.length : 0;
+    const foamCount = parameters.oceanAddFoam ? foamTileNames.length : 0;
+    const oceanSlicesCount = oceanAsset?.slices ? oceanAsset.slices.length : 0;
+    const decalCount = decalAssets ? decalAssets.length : 0;
+    const totalCount = slicesCount + variationsCount + objectsCount + maskCount + foamCount + oceanSlicesCount + decalCount;
     let loadedCount = 0;
 
     const checkLoaded = () => {
@@ -250,18 +436,120 @@ export default function MapPreview({
       return;
     }
 
+    if (decalAssets) {
+      decalAssets.forEach(decal => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          loadedImages[`decal_${decal.id}`] = img;
+          checkLoaded();
+        };
+        img.src = decal.imageUrl;
+      });
+    }
+
     groundAsset.slices.forEach(slice => {
       const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.onload = () => {
         loadedImages[slice.name] = img;
         checkLoaded();
+
+        if (slice.variations) {
+          slice.variations.forEach((v, vIdx) => {
+            const varImg = new Image();
+            varImg.crossOrigin = 'anonymous';
+            varImg.onload = () => {
+              if (slice.name === 'Ground_CenterFill') {
+                const origImg = loadedImages[slice.name];
+                const canvas = document.createElement('canvas');
+                canvas.width = origImg.width;
+                canvas.height = origImg.height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  // Create mask canvas
+                  const maskCanvas = document.createElement('canvas');
+                  maskCanvas.width = origImg.width;
+                  maskCanvas.height = origImg.height;
+                  const maskCtx = maskCanvas.getContext('2d');
+
+                  if (maskCtx) {
+                    const smoothing = v.seamSmoothing ?? 0;
+                    if (smoothing > 0) maskCtx.filter = `blur(${smoothing / 10}px)`;
+
+                    const scale = Math.max(0.1, 1 - (smoothing / 1000));
+                    const anchorX = origImg.width / 2;
+                    const anchorY = origImg.height / 4;
+
+                    maskCtx.translate(anchorX, anchorY);
+                    maskCtx.scale(scale, scale);
+
+                    // Draw diamond mask
+                    maskCtx.beginPath();
+                    maskCtx.moveTo(0, -origImg.height / 4);
+                    maskCtx.lineTo(origImg.width / 2, 0);
+                    maskCtx.lineTo(0, origImg.height / 4);
+                    maskCtx.lineTo(-origImg.width / 2, 0);
+                    maskCtx.closePath();
+                    maskCtx.fillStyle = 'black';
+                    maskCtx.fill();
+
+                    // Reset transform & filter, source-in the variation image
+                    maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+                    maskCtx.filter = 'none';
+                    maskCtx.globalCompositeOperation = 'source-in';
+                    maskCtx.drawImage(varImg, 0, 0);
+
+                    // Draw original image, then masked variation over it
+                    ctx.drawImage(origImg, 0, 0);
+                    ctx.globalAlpha = v.opacity ?? 1;
+                    ctx.drawImage(maskCanvas, 0, 0);
+                  }
+
+                  const compImg = new Image();
+                  compImg.onload = () => {
+                    loadedImages[`${slice.name}_var_${vIdx}`] = compImg;
+                    checkLoaded();
+                  };
+                  compImg.src = canvas.toDataURL('image/png');
+                  return;
+                }
+              }
+              loadedImages[`${slice.name}_var_${vIdx}`] = varImg;
+              checkLoaded();
+            };
+            varImg.onerror = () => {
+              console.error("Failed to load slice variation image:", slice.name, vIdx);
+              checkLoaded();
+            }
+            varImg.src = v.url;
+          });
+        }
       };
       img.onerror = () => {
         console.error("Failed to load slice image:", slice.name);
         checkLoaded();
+        if (slice.variations) {
+          slice.variations.forEach(() => checkLoaded());
+        }
       }
       img.src = slice.url;
     });
+
+    if (oceanAsset && oceanAsset.slices) {
+      oceanAsset.slices.forEach(slice => {
+        const img = new Image();
+        img.onload = () => {
+          loadedImages[`ocean_${slice.name}`] = img;
+          checkLoaded();
+        };
+        img.onerror = () => {
+          console.error("Failed to load ocean slice image:", slice.name);
+          checkLoaded();
+        }
+        img.src = slice.url;
+      });
+    }
 
     if (objectAssets) {
       objectAssets.forEach(asset => {
@@ -290,7 +578,38 @@ export default function MapPreview({
         }
       });
     }
-  }, [groundAsset, objectAssets]);
+
+    if (maskCount > 0) {
+      for (const tileName of oceanTileNames) {
+        const img = new Image();
+        img.src = `/assets/OceanTaper_v2/Ocean_${tileName}.png`;
+        img.onload = () => {
+          loadedImages[`mask_Tile_${tileName.replace('Tile_', '')}`] = img as any;
+          checkLoaded();
+        };
+        img.onerror = () => checkLoaded();
+      }
+    }
+
+    if (foamCount > 0) {
+      for (const tileName of foamTileNames) {
+        const img = new Image();
+        img.src = `/assets/OceanTaper_v2/Foamtiles/Foam_${tileName}.png`;
+        img.onload = () => {
+          const foamCanvas = document.createElement('canvas');
+          foamCanvas.width = img.width; foamCanvas.height = img.height;
+          const foamCtx = foamCanvas.getContext('2d')!;
+          foamCtx.drawImage(img, 0, 0);
+          foamCtx.globalCompositeOperation = 'source-in';
+          foamCtx.fillStyle = `hsl(${parameters.oceanFoamColor?.h || 63}, ${parameters.oceanFoamColor?.s || 70}%, ${parameters.oceanFoamColor?.l || 90}%)`;
+          foamCtx.fillRect(0, 0, img.width, img.height);
+          loadedImages[`foam_Tile_${tileName.replace('Tile_', '')}`] = foamCanvas as any;
+          checkLoaded();
+        };
+        img.onerror = () => checkLoaded();
+      }
+    }
+  }, [groundAsset, objectAssets, oceanAsset, parameters, decalAssets]);
 
   // Render canvas
   useEffect(() => {
@@ -316,7 +635,7 @@ export default function MapPreview({
     for (let row = 0; row < grid.length; row++) {
       for (let col = 0; col < grid[row].length; col++) {
         const isoX = (col - row) * tileHalfWidth;
-        const isoY = (col + row) * tileHalfHeight;
+        const isoY = -(col + row) * tileHalfHeight;
         if (isoX < minX) minX = isoX;
         if (isoX > maxX) maxX = isoX;
         if (isoY < minY) minY = isoY;
@@ -417,7 +736,7 @@ export default function MapPreview({
       return true;
     };
 
-    const sortedLevels = [...levels].sort((a, b) => a - b);
+    const sortedLevels = [0, ...levels].sort((a, b) => a - b);
     for (const level of sortedLevels) {
       const gridLvl = gridLevels[level];
       if (!gridLvl) continue;
@@ -426,9 +745,9 @@ export default function MapPreview({
 
       for (let row = 0; row < gridLvl.length; row++) {
         for (let col = 0; col < gridLvl[row].length; col++) {
-          if (gridLvl[row][col].isLand && gridLvl[row][col].tileId) {
+          if ((gridLvl[row][col].isLand || level === 0) && gridLvl[row][col].tileId) {
             const isoX = (col - row) * tileHalfWidth;
-            const isoY = (col + row) * tileHalfHeight - yOffset;
+            const isoY = -(col + row) * tileHalfHeight - yOffset;
 
             // Frustum Culling
             const screenX = isoX * finalScale + offsetX;
@@ -449,7 +768,7 @@ export default function MapPreview({
               col, row,
               isoX,
               isoY,
-              depth: row + col + (level * 1000),
+              depth: (level * 1000) - (row + col),
               isTopFace: heightMap[`${col},${row}`] === level
             });
           }
@@ -463,23 +782,243 @@ export default function MapPreview({
 
     // PASS 1: Draw Ground and Grid
     for (const cell of cellsToRender) {
-      const img = images[cell.tileId!];
+      let img = null;
+      if (cell.layer === 0) {
+        img = (oceanAsset?.slices[0] ? images[`ocean_${oceanAsset.slices[0].name}`] : null) || images['ocean'] || (groundAsset?.slices[0] ? images[groundAsset.slices[0].name] : null);
+      } else {
+        const slice = groundAsset?.slices?.find(s => s.name === ('Ground_' + cell.tileId));
+        if (slice && slice.variations && slice.variations.length > 0) {
+          const seed = cell.col * 12.9898 + cell.row * 78.233 + cell.layer * 13.1313;
+          const rand = Math.abs(Math.sin(seed) * 43758.5453);
+
+          let totalFactor = 1;
+          slice.variations.forEach(v => { totalFactor += v.factor; });
+
+          if (totalFactor <= 0) {
+            img = images['Ground_' + cell.tileId!];
+          } else {
+            let choiceValue = (rand - Math.floor(rand)) * totalFactor;
+            let currentSum = 1;
+            if (choiceValue < currentSum) {
+              img = images['Ground_' + cell.tileId!];
+            } else {
+              let chosenVar = 0;
+              for (let i = 0; i < slice.variations.length; i++) {
+                currentSum += slice.variations[i].factor;
+                if (choiceValue < currentSum) {
+                  chosenVar = i;
+                  break;
+                }
+              }
+              img = images[`Ground_${cell.tileId!}_var_${chosenVar}`] || images['Ground_' + cell.tileId!];
+            }
+          }
+        } else {
+          img = images['Ground_' + cell.tileId!];
+        }
+      }
+
+      const floorDrawW = tileHalfWidth * 2 + 1;
+      const floorDrawH = tileHalfHeight * 2 + 1;
+
       if (img) {
-        ctx.drawImage(img, cell.isoX - tileHalfWidth, cell.isoY - tileHalfHeight, 280, 280);
+        if (cell.layer === 0) {
+          ctx.drawImage(img, cell.isoX - tileHalfWidth, cell.isoY - tileHalfHeight + (tileHalfHeight * 2), floorDrawW, floorDrawH);
+        } else {
+          const scale = floorDrawW / img.width;
+          ctx.drawImage(img, cell.isoX - tileHalfWidth, cell.isoY - tileHalfHeight, floorDrawW, img.height * scale);
+        }
+      } else if (cell.layer === 0) {
+        ctx.save();
+        ctx.translate(cell.isoX, cell.isoY + (tileHalfHeight * 2));
+        ctx.beginPath();
+        ctx.moveTo(0, -tileHalfHeight);
+        ctx.lineTo(tileHalfWidth, 0);
+        ctx.lineTo(0, tileHalfHeight);
+        ctx.lineTo(-tileHalfWidth, 0);
+        ctx.closePath();
+        ctx.fillStyle = '#1E3A8A';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw Ocean Taper Masks dynamically
+      if (cell.layer === 0 && parameters.oceanTaperLevels > 0) {
+        const maxLvl = parameters.oceanTaperLevels;
+        for (let lvl = 1; lvl <= maxLvl + 1; lvl++) {
+          if ((cell.distance || 0) >= lvl) {
+            let maskToDraw: string | null = null;
+            if ((cell.distance || 0) > lvl || lvl > maxLvl) {
+              maskToDraw = 'Tile_LowerDepth';
+            } else {
+              const isCurrent = (d: number | undefined) => (d !== undefined && d <= lvl) ? 1 : 0;
+              const getDist = (cx: number, cy: number) => {
+                if (cx < 0 || cx >= parameters.canvasWidth || cy < 0 || cy >= parameters.canvasHeight) return cell.distance || 0;
+                return gridLevels[0]?.[cy]?.[cx]?.distance || 0;
+              };
+
+              const distN = cell.col < parameters.canvasWidth - 1 ? getDist(cell.col + 1, cell.row) : (cell.distance || 0);
+              const distE = cell.row > 0 ? getDist(cell.col, cell.row - 1) : (cell.distance || 0);
+              const distS = cell.col > 0 ? getDist(cell.col - 1, cell.row) : (cell.distance || 0);
+              const distW = cell.row < parameters.canvasHeight - 1 ? getDist(cell.col, cell.row + 1) : (cell.distance || 0);
+
+              const n = isCurrent(distN);
+              const e = isCurrent(distE);
+              const s = isCurrent(distS);
+              const w = isCurrent(distW);
+
+              const distNE = cell.row > 0 && cell.col < parameters.canvasWidth - 1 ? getDist(cell.col + 1, cell.row - 1) : (cell.distance || 0);
+              const distSE = cell.row > 0 && cell.col > 0 ? getDist(cell.col - 1, cell.row - 1) : (cell.distance || 0);
+              const distSW = cell.row < parameters.canvasHeight - 1 && cell.col > 0 ? getDist(cell.col - 1, cell.row + 1) : (cell.distance || 0);
+              const distNW = cell.row < parameters.canvasHeight - 1 && cell.col < parameters.canvasWidth - 1 ? getDist(cell.col + 1, cell.row + 1) : (cell.distance || 0);
+
+              if (n === 0 && e === 0 && s === 0 && w === 0) {
+                maskToDraw = 'Tile_LowerDepth';
+              } else if (n === 1 && e === 1 && s === 1 && w === 1) {
+                const ne = isCurrent(distNE);
+                const nw = isCurrent(distNW);
+                const se = isCurrent(distSE);
+                const sw = isCurrent(distSW);
+
+                const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, ne, se, sw, nw);
+                if (tileIdResult) {
+                  let formattedName = tileIdResult;
+                  if (tileIdResult === 'CenterFill') formattedName = 'Center';
+                  else if (tileIdResult.startsWith('InnerCorner')) formattedName = 'InnerCorner_' + tileIdResult.substring(11);
+                  maskToDraw = `Tile_${formattedName}`;
+                }
+              } else {
+                const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, 1, 1, 1, 1);
+                if (tileIdResult) {
+                  let formattedName = tileIdResult;
+                  if (tileIdResult.startsWith('Edge')) formattedName = 'Edge_' + tileIdResult.substring(4);
+                  else if (tileIdResult.startsWith('OutterCorner')) formattedName = 'OutterCorner_' + tileIdResult.substring(12);
+                  maskToDraw = `Tile_${formattedName}`;
+                }
+              }
+
+              if (maskToDraw) {
+                cell.taperTile = `Lvl${lvl}_${maskToDraw}`;
+                if (gridLevels[0]?.[cell.row]?.[cell.col]) {
+                  gridLevels[0][cell.row][cell.col].taperTile = cell.taperTile;
+                }
+              }
+            }
+
+            if (maskToDraw) {
+              if (parameters.oceanTaperLevels > 0 && lvl <= maxLvl) {
+                const maskImg = images[`mask_${maskToDraw}`];
+                if (maskImg) {
+                  ctx.save();
+                  ctx.globalCompositeOperation = 'multiply';
+                  ctx.globalAlpha = parameters.oceanDimAmount / parameters.oceanTaperLevels;
+                  ctx.drawImage(maskImg, cell.isoX - tileHalfWidth, cell.isoY - tileHalfHeight + (tileHalfHeight * 2), floorDrawW, floorDrawH);
+                  ctx.restore();
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // [FOAM LAYER 1: OUTER COASTLINE]
+      if (cell.layer === 0 && parameters.oceanAddFoam && (cell as any).rawDistance === 1) {
+        let foamMaskToDraw: string | null = null;
+        const getRawDist = (cx: number, cy: number) => {
+          if (cx < 0 || cx >= parameters.canvasWidth || cy < 0 || cy >= parameters.canvasHeight) return 2;
+          return (gridLevels[0]?.[cy]?.[cx] as any)?.rawDistance || 0;
+        };
+
+        const isCurrent = (d: number | undefined) => (d !== undefined && d <= 1) ? 1 : 0;
+        const distN = cell.col < parameters.canvasWidth - 1 ? getRawDist(cell.col + 1, cell.row) : (cell as any).rawDistance;
+        const distE = cell.row > 0 ? getRawDist(cell.col, cell.row - 1) : (cell as any).rawDistance;
+        const distS = cell.col > 0 ? getRawDist(cell.col - 1, cell.row) : (cell as any).rawDistance;
+        const distW = cell.row < parameters.canvasHeight - 1 ? getRawDist(cell.col, cell.row + 1) : (cell as any).rawDistance;
+
+        const n = isCurrent(distN);
+        const e = isCurrent(distE);
+        const s = isCurrent(distS);
+        const w = isCurrent(distW);
+
+        const distNE = cell.row > 0 && cell.col < parameters.canvasWidth - 1 ? getRawDist(cell.col + 1, cell.row - 1) : (cell as any).rawDistance;
+        const distSE = cell.row > 0 && cell.col > 0 ? getRawDist(cell.col - 1, cell.row - 1) : (cell as any).rawDistance;
+        const distSW = cell.row < parameters.canvasHeight - 1 && cell.col > 0 ? getRawDist(cell.col - 1, cell.row + 1) : (cell as any).rawDistance;
+        const distNW = cell.row < parameters.canvasHeight - 1 && cell.col < parameters.canvasWidth - 1 ? getRawDist(cell.col + 1, cell.row + 1) : (cell as any).rawDistance;
+
+        if (distN === 0 && distW === 0 && distE > 0 && distS > 0) foamMaskToDraw = 'Tile_InnerCorner_South';
+        else if (distN === 0 && distE === 0 && distW > 0 && distS > 0) foamMaskToDraw = 'Tile_InnerCorner_West';
+        else if (distS === 0 && distW === 0 && distE > 0 && distN > 0) foamMaskToDraw = 'Tile_InnerCorner_East';
+        else if (distS === 0 && distE === 0 && distW > 0 && distN > 0) foamMaskToDraw = 'Tile_InnerCorner_North';
+        else if (distNW === 0 && distN === 1 && distS > 1) foamMaskToDraw = 'Tile_OutterCorner_South';
+        else if (distNE === 0 && distN === 1 && distS > 1) foamMaskToDraw = 'Tile_OutterCorner_West';
+        else if (distSW === 0 && distS === 1 && distN > 1) foamMaskToDraw = 'Tile_OutterCorner_East';
+        else if (distSE === 0 && distS === 1 && distN > 1) foamMaskToDraw = 'Tile_OutterCorner_North';
+        else if (n === 0 && e === 0 && s === 0 && w === 0) {
+          foamMaskToDraw = 'Tile_Center';
+        } else if (n === 1 && e === 1 && s === 1 && w === 1) {
+          const ne = isCurrent(distNE);
+          const nw = isCurrent(distNW);
+          const se = isCurrent(distSE);
+          const sw = isCurrent(distSW);
+          const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, ne, se, sw, nw);
+          if (tileIdResult) {
+            let formattedName = tileIdResult;
+            if (tileIdResult === 'CenterFill') formattedName = 'Center';
+            else if (tileIdResult.startsWith('InnerCorner')) formattedName = 'InnerCorner_' + tileIdResult.substring(11);
+            foamMaskToDraw = `Tile_${formattedName}`;
+          }
+        } else {
+          const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, 1, 1, 1, 1);
+          if (tileIdResult) {
+            let formattedName = tileIdResult;
+            if (tileIdResult.startsWith('Edge')) formattedName = 'Edge_' + tileIdResult.substring(4);
+            else if (tileIdResult.startsWith('OutterCorner')) formattedName = 'OutterCorner_' + tileIdResult.substring(12);
+            foamMaskToDraw = `Tile_${formattedName}`;
+          }
+        }
+
+        if (foamMaskToDraw && foamMaskToDraw !== 'Tile_LowerDepth') {
+          cell.foamTile = foamMaskToDraw;
+          if (gridLevels[0]?.[cell.row]?.[cell.col]) {
+            gridLevels[0][cell.row][cell.col].foamTile = foamMaskToDraw;
+          }
+          const foamImg = images[`foam_${foamMaskToDraw}`];
+          if (foamImg) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(foamImg, cell.isoX - tileHalfWidth, cell.isoY - tileHalfHeight + (tileHalfHeight * 2), floorDrawW, floorDrawH);
+            ctx.restore();
+          }
+        }
+      }
+
+      // [FOAM LAYER 2: INNER GAP FILLER]
+      if (cell.layer === 0 && parameters.oceanAddFoam && cell.distance === 0) {
+        cell.foamTile = 'Tile_LowerDepth';
+        if (gridLevels[0]?.[cell.row]?.[cell.col]) {
+          gridLevels[0][cell.row][cell.col].foamTile = 'Tile_LowerDepth';
+        }
+        const foamImg = images['foam_Tile_Center'];
+        if (foamImg) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.drawImage(foamImg, cell.isoX - tileHalfWidth, cell.isoY - tileHalfHeight + (tileHalfHeight * 2), floorDrawW, floorDrawH);
+          ctx.restore();
+        }
       }
 
       if (gridSettings.show && cell.isTopFace) {
         ctx.save();
 
-        // Calculate dynamic grid color based on brightness
         const c = Math.round((gridSettings.brightness / 100) * 255);
         const gridColor = `rgba(${c}, ${c}, ${c}, ${gridSettings.opacity / 100})`;
         const fillAlpha = (gridSettings.opacity / 100) * 0.8;
 
-        // Draw occupied slots
         for (let lx = -1; lx <= 1; lx++) {
           for (let ly = -1; ly <= 1; ly++) {
-            if (!checkSubCellBuildable(cell.col, cell.row, cell.layer, lx, ly)) continue;
+            if (!checkSubCellBuildable(cell.col, cell.row, cell.layer || 1, lx, ly)) continue;
 
             const gx = cell.col * 3 + lx + 1;
             const gy = cell.row * 3 + ly + 1;
@@ -491,7 +1030,7 @@ export default function MapPreview({
               ctx.fillStyle = isSelected ? `rgba(34, 197, 94, ${fillAlpha})` : `rgba(239, 68, 68, ${fillAlpha})`;
 
               const slotIsoX = cell.isoX + (lx - ly) * (140 / 3);
-              const slotIsoY = cell.isoY + (lx + ly) * (70 / 3);
+              const slotIsoY = cell.isoY - (lx + ly) * (70 / 3);
 
               ctx.beginPath();
               ctx.moveTo(slotIsoX, slotIsoY - 70 / 3);
@@ -504,19 +1043,12 @@ export default function MapPreview({
           }
         }
 
-        // Draw the individual subgrid outlines to respect buildable toggle
         for (let lx = -1; lx <= 1; lx++) {
           for (let ly = -1; ly <= 1; ly++) {
-            const isBuildable = checkSubCellBuildable(cell.col, cell.row, cell.layer, lx, ly);
-            
-            // If we are not showing buildable overlays, we just skip unbuildable grid lines (legacy behavior)
-            // Wait, the user said "Make buildable toggle overlay buildable tiles with light green, non-buildable with light red."
-            // So if gridSettings.showOnlyBuildable is false, we just draw the normal lines for EVERYTHING.
-            
-            if (!gridSettings.showOnlyBuildable && !isBuildable) continue; // Wait, if showOnlyBuildable is false, isBuildable is always true anyway because of checkSubCellBuildable's first line!
-
+            const isBuildable = checkSubCellBuildable(cell.col, cell.row, cell.layer || 1, lx, ly);
+            if (!gridSettings.showOnlyBuildable && !isBuildable) continue;
             const slotIsoX = cell.isoX + (lx - ly) * (140 / 3);
-            const slotIsoY = cell.isoY + (lx + ly) * (70 / 3);
+            const slotIsoY = cell.isoY - (lx + ly) * (70 / 3);
 
             ctx.beginPath();
             ctx.moveTo(slotIsoX, slotIsoY - 70 / 3);
@@ -535,11 +1067,9 @@ export default function MapPreview({
             ctx.stroke();
           }
         }
-
         ctx.restore();
       }
 
-      // Collect objects
       if (cell.objects && cell.objects.length > 0) {
         for (const obj of cell.objects) {
           const objImg = images[obj.id];
@@ -547,26 +1077,30 @@ export default function MapPreview({
 
           if (objImg && assetInfo) {
             const slotIsoX = cell.isoX + (obj.lx - obj.ly) * (140 / 3);
-            const slotIsoY = cell.isoY + (obj.lx + obj.ly) * (70 / 3);
+            const slotIsoY = cell.isoY - (obj.lx + obj.ly) * (70 / 3);
 
             const scale = assetInfo.scale || 1.0;
-            const aspectRatio = objImg.width / objImg.height;
 
-            let objW, objH;
-            if (aspectRatio >= 1) {
-              objW = 140 * scale;
-              objH = (140 / aspectRatio) * scale;
-            } else {
-              objH = 140 * scale;
-              objW = 140 * aspectRatio * scale;
+            // Calculate base ground scale to match Unity's relative PPU
+            let groundImgWidth = 256; // Standard fallback
+            if (groundAsset?.slices?.[0]) {
+              const groundImgRef = images[groundAsset.slices[0].name];
+              if (groundImgRef && groundImgRef.width > 0) {
+                groundImgWidth = groundImgRef.width;
+              }
             }
+
+            const floorDrawW = 140 * 2 + 1; // 281
+            const groundScale = floorDrawW / groundImgWidth;
+
+            const objW = objImg.width * groundScale * scale;
+            const objH = objImg.height * groundScale * scale;
 
             const gridOffsetX = assetInfo.gridOffset?.x || 0;
             const gridOffsetY = assetInfo.gridOffset?.y || 0;
             const imgCenterX = slotIsoX - gridOffsetX * scale;
             const imgBottomY = slotIsoY - gridOffsetY * scale;
 
-            // Global depth of the object based on exact slot coordinates
             const globalGx = cell.col * 3 + obj.lx + 1;
             const globalGy = cell.row * 3 + obj.ly + 1;
             const exactDepth = globalGx + globalGy;
@@ -586,8 +1120,42 @@ export default function MapPreview({
       }
     }
 
+    // PASS 1.5: Draw Decals
+    if (decalOverrides && decalAssets) {
+      Object.values(decalOverrides).forEach((decalInstance: any) => {
+        if (decalInstance.deleted) return;
+        const decalAsset = decalAssets.find(d => d.id === decalInstance.assetId);
+        if (!decalAsset) return;
+
+        const decalImg = images[`decal_${decalAsset.id}`];
+        if (!decalImg) return;
+
+        const cellX = decalInstance.cellX;
+        const cellY = decalInstance.cellY;
+
+        const c_isoX = (cellX - cellY) * tileHalfWidth;
+        const c_isoY = -(cellX + cellY) * tileHalfHeight;
+
+        const slotIsoX = c_isoX + (decalInstance.lx - decalInstance.ly) * (140 / 3);
+        const slotIsoY = c_isoY - (decalInstance.lx + decalInstance.ly) * (70 / 3);
+
+        ctx.save();
+        ctx.globalAlpha = decalAsset.opacity || 1;
+        if (decalAsset.smoothing > 0) {
+          ctx.filter = `blur(${decalAsset.smoothing}px)`;
+        }
+
+        const scale = decalAsset.size || 1;
+        const w = decalImg.width * scale;
+        const h = decalImg.height * scale;
+
+        ctx.drawImage(decalImg, slotIsoX - w / 2, slotIsoY - h / 2, w, h);
+        ctx.restore();
+      });
+    }
+
     // PASS 2: Draw Objects sorted by exact depth
-    objectsToRender.sort((a, b) => a.exactDepth - b.exactDepth);
+    objectsToRender.sort((a, b) => b.exactDepth - a.exactDepth);
 
     for (const obj of objectsToRender) {
       ctx.save();
@@ -630,12 +1198,13 @@ export default function MapPreview({
         instanceId: obj.instanceId,
         isoX: obj.imgCenterX,
         isoY: obj.imgBottomY - obj.objH / 2, // Shift hit center up to the middle of the sprite
-        hitRadius: 80 * obj.scale
+        objW: obj.objW,
+        objH: obj.objH
       });
     }
 
     // Brush Preview
-    if (activeTool === 'paint' && brushPos && (activeSelection?.type === 'object' || activeSelection?.type === 'ground')) {
+    if (activeTool === 'paint' && brushPos && (activeSelection?.type === 'object' || activeSelection?.type === 'ground' || activeSelection?.type === 'ocean' || activeSelection?.type === 'ground_variation')) {
       ctx.save();
       ctx.globalAlpha = 0.6;
       const tintColor = brushPos.isValid ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
@@ -643,10 +1212,9 @@ export default function MapPreview({
       const dx = 140 / 3;
       const dy = 70 / 3;
 
-      const renderLevel = activeSelection?.type === 'ground' ? activeLevel : (brushPos.level === 0 ? 1 : brushPos.level);
       const brushYOffset = 0; // Removed elevation offset
 
-      if (activeSelection?.type === 'ground') {
+      if (activeSelection?.type === 'ground' || activeSelection?.type === 'ocean') {
         // Draw 2x2 ground highlight
         ctx.fillStyle = tintColor;
         const cellX = Math.floor((brushPos.gx + 1) / 3);
@@ -657,12 +1225,12 @@ export default function MapPreview({
             const cx = cellX + px;
             const cy = cellY + py;
             const tileIsoX = (cx - cy) * 140;
-            const tileIsoY = (cx + cy) * 70 - brushYOffset;
+            const tileIsoY = -(cx + cy) * 70 - brushYOffset;
 
             for (let lx = -1; lx <= 1; lx++) {
               for (let ly = -1; ly <= 1; ly++) {
                 const slotIsoX = tileIsoX + (lx - ly) * (140 / 3);
-                const slotIsoY = tileIsoY + (lx + ly) * (70 / 3);
+                const slotIsoY = tileIsoY - (lx + ly) * (70 / 3);
 
                 ctx.beginPath();
                 ctx.moveTo(slotIsoX, slotIsoY - 70 / 3);
@@ -675,52 +1243,46 @@ export default function MapPreview({
             }
           }
         }
-      } else if (activeSelection?.type === 'object') {
-        // Draw object preview
-        const objImg = images[activeSelection.id];
-        const assetInfo = objectAssets?.find(a => a.id === activeSelection.id);
-        if (objImg && assetInfo) {
-          const scale = assetInfo.scale || 1.0;
-          const aspectRatio = objImg.width / objImg.height;
+      } else if (activeSelection?.type === 'object' || activeSelection?.type === 'ground_variation') {
+        const id = activeSelection.id;
+        const assetInfo = activeSelection.type === 'object'
+          ? objectAssets?.find(a => a.id === id)
+          : decalAssets?.find(a => a.id === id);
 
-          let objW, objH;
-          if (aspectRatio >= 1) {
-            objW = 140 * scale;
-            objH = (140 / aspectRatio) * scale;
-          } else {
-            objH = 140 * scale;
-            objW = 140 * aspectRatio * scale;
-          }
+        if (assetInfo) {
+          const img = images[activeSelection.type === 'object' ? id : `decal_${id}`];
+          if (img) {
+            const scale = (activeSelection.type === 'object' ? (assetInfo.scale || 1) : (assetInfo.size || 1));
+            const slotIsoX = (brushPos.gx - brushPos.gy) * dx;
+            const slotIsoY = -(brushPos.gx + brushPos.gy) * dy - brushYOffset;
 
-          const slotIsoX = (brushPos.gx - brushPos.gy) * dx;
-          const slotIsoY = (brushPos.gx + brushPos.gy) * dy - brushYOffset;
-
-          // Draw footprint grid underneath the image
-          const rawBaseTiles = assetInfo.baseTiles || [{ lx: 0, ly: 0 }];
-          const limit = Math.floor(1.5 * scale);
-          let baseTiles = rawBaseTiles.filter((t: { lx: number, ly: number }) => Math.abs(t.lx) <= limit && Math.abs(t.ly) <= limit);
-          if (baseTiles.length === 0) baseTiles = [{ lx: 0, ly: 0 }];
-
-          ctx.fillStyle = tintColor;
-          for (const tile of baseTiles) {
-            const tileSlotIsoX = slotIsoX + (tile.lx - tile.ly) * dx;
-            const tileSlotIsoY = slotIsoY + (tile.lx + tile.ly) * dy;
-             
+            ctx.fillStyle = tintColor;
             ctx.beginPath();
-            ctx.moveTo(tileSlotIsoX, tileSlotIsoY - dy);
-            ctx.lineTo(tileSlotIsoX + dx, tileSlotIsoY);
-            ctx.lineTo(tileSlotIsoX, tileSlotIsoY + dy);
-            ctx.lineTo(tileSlotIsoX - dx, tileSlotIsoY);
-            ctx.closePath();
+            ctx.arc(slotIsoX, slotIsoY, 20 * scale, 0, Math.PI * 2);
             ctx.fill();
+
+            if (activeSelection.type === 'object') {
+              let groundImgWidth = 256;
+              if (groundAsset?.slices?.[0]) {
+                const groundImgRef = images[groundAsset.slices[0].name];
+                if (groundImgRef && groundImgRef.width > 0) groundImgWidth = groundImgRef.width;
+              }
+              const groundScale = (140 * 2 + 1) / groundImgWidth;
+
+              const w = img.width * groundScale * scale;
+              const h = img.height * groundScale * scale;
+              const gridOffsetX = assetInfo.gridOffset?.x || 0;
+              const gridOffsetY = assetInfo.gridOffset?.y || 0;
+              const imgCenterX = slotIsoX - gridOffsetX * scale;
+              const imgBottomY = slotIsoY - gridOffsetY * scale;
+
+              ctx.drawImage(img, imgCenterX - w / 2, imgBottomY - h, w, h);
+            } else {
+              const w = img.width * scale;
+              const h = img.height * scale;
+              ctx.drawImage(img, slotIsoX - w / 2, slotIsoY - h / 2, w, h);
+            }
           }
-
-          const gridOffsetX = assetInfo.gridOffset?.x || 0;
-          const gridOffsetY = assetInfo.gridOffset?.y || 0;
-          const imgCenterX = slotIsoX - gridOffsetX * scale;
-          const imgBottomY = slotIsoY - gridOffsetY * scale;
-
-          ctx.drawImage(objImg, imgCenterX - objW / 2, imgBottomY - objH, objW, objH);
         }
       }
       ctx.restore();
@@ -748,16 +1310,17 @@ export default function MapPreview({
     const isoX = (x - offsetX) / finalScale;
     const isoY = (y - offsetY) / finalScale;
 
-    let closestDist = Infinity;
     let picked = null;
 
-    for (const o of renderedObjectsRef.current) {
-      const dx = o.isoX - isoX;
-      const dy = o.isoY - isoY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < o.hitRadius && dist < closestDist) {
-        closestDist = dist;
+    for (let i = renderedObjectsRef.current.length - 1; i >= 0; i--) {
+      const o = renderedObjectsRef.current[i];
+      const halfW = o.objW / 2;
+      const halfH = o.objH / 2;
+
+      if (isoX >= o.isoX - halfW && isoX <= o.isoX + halfW &&
+        isoY >= o.isoY - halfH && isoY <= o.isoY + halfH) {
         picked = o;
+        break; // Pick the top-most visible object
       }
     }
 
@@ -786,8 +1349,8 @@ export default function MapPreview({
 
       const dxGrid = 140 / 3;
       const dyGrid = 70 / 3;
-      const gx = Math.round((isoX / dxGrid + isoY / dyGrid) / 2);
-      const gy = Math.round((isoY / dyGrid - isoX / dxGrid) / 2);
+      const gx = Math.round((isoX / dxGrid - isoY / dyGrid) / 2);
+      const gy = Math.round(-(isoX / dxGrid + isoY / dyGrid) / 2);
 
       applyPaintErase(gx, gy, activeTool);
     }
@@ -812,6 +1375,24 @@ export default function MapPreview({
         }
         if (hasChanges) {
           setGroundOverrides(prev => ({ ...prev, ...newStrokes }));
+        }
+      } else if (activeSelection?.type === 'ocean') {
+        const cellX = Math.floor((gx + 1) / 3);
+        const cellY = Math.floor((gy + 1) / 3);
+        let hasChanges = false;
+        const newStrokes: Record<string, number> = {};
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const key = `${cellX + dx},${cellY + dy}`;
+            if (oceanOverrides && oceanOverrides[key] !== activeLevel && paintStrokesRef.current[key] !== activeLevel) {
+              paintStrokesRef.current[key] = activeLevel;
+              newStrokes[key] = activeLevel;
+              hasChanges = true;
+            }
+          }
+        }
+        if (hasChanges && setOceanOverrides) {
+          setOceanOverrides(prev => ({ ...prev, ...newStrokes }));
         }
       } else if (activeSelection?.type === 'object') {
         const cellX = Math.floor(gx / 3);
@@ -843,6 +1424,38 @@ export default function MapPreview({
             } as any
           }));
         }
+      } else if (activeSelection?.type === 'ground_variation' && activeSelection.id) {
+        const cellX = Math.floor(gx / 3);
+        const cellY = Math.floor(gy / 3);
+        const lx = gx - cellX * 3 - 1;
+        const ly = gy - cellY * 3 - 1;
+
+        let maxLevel = 0;
+        for (const level of levels) {
+          if (gridLevels[level] && gridLevels[level][cellY] && gridLevels[level][cellY][cellX] && gridLevels[level][cellY][cellX].isLand) {
+            if (level > maxLevel) maxLevel = level;
+          }
+        }
+
+        const strokeKey = `decal_${gx}_${gy}`;
+
+        if (!paintStrokesRef.current[strokeKey]) {
+          paintStrokesRef.current[strokeKey] = activeLevel;
+          const newInstanceId = `decal_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+          if (setDecalOverrides) {
+            setDecalOverrides(prev => ({
+              ...prev,
+              [newInstanceId]: {
+                cellX,
+                cellY,
+                lx,
+                ly,
+                layer: maxLevel === 0 ? 1 : maxLevel,
+                assetId: activeSelection.id
+              } as any
+            }));
+          }
+        }
       }
     } else if (tool === 'erase') {
       if (activeSelection?.type === 'ground') {
@@ -852,6 +1465,37 @@ export default function MapPreview({
         if (groundOverrides[key] !== 0 && paintStrokesRef.current[key] !== 0) {
           paintStrokesRef.current[key] = 0;
           setGroundOverrides(prev => ({ ...prev, [key]: 0 }));
+        }
+      } else if (activeSelection?.type === 'ocean') {
+        const cellX = Math.floor((gx + 1) / 3);
+        const cellY = Math.floor((gy + 1) / 3);
+        const key = `${cellX},${cellY}`;
+        if (oceanOverrides && oceanOverrides[key] !== undefined && paintStrokesRef.current[key] !== -1) {
+          paintStrokesRef.current[key] = -1;
+          if (setOceanOverrides) {
+            setOceanOverrides(prev => {
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            });
+          }
+        }
+      } else if (activeSelection?.type === 'ground_variation' && activeSelection.id) {
+        if (setDecalOverrides && decalOverrides) {
+          const cellX = Math.floor(gx / 3);
+          const cellY = Math.floor(gy / 3);
+          const lx = gx - cellX * 3 - 1;
+          const ly = gy - cellY * 3 - 1;
+
+          const newOverrides = { ...decalOverrides };
+          let erased = false;
+          for (const [id, dec] of Object.entries(newOverrides)) {
+            if (dec.cellX === cellX && dec.cellY === cellY && dec.lx === lx && dec.ly === ly && dec.assetId === activeSelection.id && !dec.deleted) {
+              newOverrides[id] = { ...dec, deleted: true } as any;
+              erased = true;
+            }
+          }
+          if (erased) setDecalOverrides(newOverrides);
         }
       }
     }
@@ -879,8 +1523,8 @@ export default function MapPreview({
     // Inverse Sub-Grid Math
     const dx = 140 / 3;
     const dy = 70 / 3;
-    const gx = Math.round((isoX / dx + isoY / dy) / 2);
-    const gy = Math.round((isoY / dy - isoX / dx) / 2);
+    const gx = Math.round((isoX / dx - isoY / dy) / 2);
+    const gy = Math.round(-(isoX / dx + isoY / dy) / 2);
 
     const cellX = Math.floor(gx / 3);
     const cellY = Math.floor(gy / 3);
@@ -904,15 +1548,16 @@ export default function MapPreview({
       applyPaintErase(gx, gy, activeTool);
 
       // Hit test for rapid object erasing
-      let closestDist = Infinity;
       let picked = null;
-      for (const o of renderedObjectsRef.current) {
-        const dX = o.isoX - isoX;
-        const dY = o.isoY - isoY;
-        const dist = Math.sqrt(dX * dX + dY * dY);
-        if (dist < o.hitRadius && dist < closestDist) {
-          closestDist = dist;
+      for (let i = renderedObjectsRef.current.length - 1; i >= 0; i--) {
+        const o = renderedObjectsRef.current[i];
+        const halfW = o.objW / 2;
+        const halfH = o.objH / 2;
+
+        if (isoX >= o.isoX - halfW && isoX <= o.isoX + halfW &&
+          isoY >= o.isoY - halfH && isoY <= o.isoY + halfH) {
           picked = o;
+          break;
         }
       }
       if (picked) {
@@ -944,7 +1589,7 @@ export default function MapPreview({
     if (draggedInstance) {
       if (dragSlot) {
         let isDeleted = false;
-        if (dragSlot.cellX < 0 || dragSlot.cellX >= parameters.width || dragSlot.cellY < 0 || dragSlot.cellY >= parameters.height) {
+        if (dragSlot.cellX < 0 || dragSlot.cellX >= parameters.canvasWidth || dragSlot.cellY < 0 || dragSlot.cellY >= parameters.canvasHeight) {
           isDeleted = true; // Off grid completely
         }
 
@@ -965,28 +1610,28 @@ export default function MapPreview({
 
     setLevels(prev => prev.filter(l => l !== levelId));
     if (activeLevel === levelId) {
-       const remaining = levels.filter(l => l !== levelId);
-       if (remaining.length > 0) setActiveLevel(remaining[remaining.length - 1]);
+      const remaining = levels.filter(l => l !== levelId);
+      if (remaining.length > 0) setActiveLevel(remaining[remaining.length - 1]);
     }
-    
+
     setGroundOverrides(prev => {
-       const next = { ...prev };
-       for (const key of Object.keys(next)) {
-          if (key.startsWith(`${levelId},`)) {
-             next[key] = 0;
-          }
-       }
-       return next;
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (key.startsWith(`${levelId},`)) {
+          next[key] = 0;
+        }
+      }
+      return next;
     });
 
     setInstanceOverrides(prev => {
-       const next = { ...prev };
-       for (const key of Object.keys(next)) {
-          if (next[key].layer === levelId) {
-             next[key] = { ...next[key], deleted: true };
-          }
-       }
-       return next;
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (next[key].layer === levelId) {
+          next[key] = { ...next[key], deleted: true };
+        }
+      }
+      return next;
     });
   };
 
@@ -1123,37 +1768,59 @@ export default function MapPreview({
       </div>
 
       {/* Level Menu */}
-      {activeSelection?.type === 'ground' && (
+      {(activeSelection?.type === 'ground' || activeSelection?.type === 'ocean') && (
         <div className="absolute bottom-4 left-4 flex flex-col items-start z-10">
           {layersExpanded && (
             <div className="mb-2 w-48 bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-lg shadow-2xl overflow-hidden flex flex-col-reverse animate-in slide-in-from-bottom-2">
-              <button
-                onClick={() => setLevels(prev => [...prev, (prev[prev.length - 1] || 0) + 1])}
-                className="w-full py-2 text-xs font-bold tracking-wider text-emerald-400 bg-emerald-900/20 hover:bg-emerald-900/40 border-t border-[var(--color-blender-border)] flex items-center justify-center gap-1 transition-colors"
-              >
-                + Add Level
-              </button>
-              {levels.slice().reverse().map(levelId => (
-                <div
-                  key={levelId}
-                  className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors border-b border-[var(--color-blender-border)] last:border-b-0 ${activeLevel === levelId ? 'bg-indigo-600/20 shadow-[inset_0_0_12px_rgba(79,70,229,0.3)]' : 'hover:bg-white/5'
-                    }`}
-                  onClick={() => setActiveLevel(levelId)}
-                >
-                  <span className={`text-xs font-bold tracking-wide ${activeLevel === levelId ? 'text-indigo-300' : 'text-gray-300'}`}>
-                    Level {levelId}
-                  </span>
-                  {levels.length > 1 && (
-                    <button 
-                       onClick={(e) => handleDeleteLevel(e, levelId)}
-                       className="text-gray-500 hover:text-red-400 transition-colors p-1"
-                       title="Delete Level"
+              {activeSelection?.type === 'ground' ? (
+                <>
+                  <button
+                    onClick={() => setLevels(prev => [...prev, (prev[prev.length - 1] || 0) + 1])}
+                    className="w-full py-2 text-xs font-bold tracking-wider text-emerald-400 bg-emerald-900/20 hover:bg-emerald-900/40 border-t border-[var(--color-blender-border)] flex items-center justify-center gap-1 transition-colors"
+                  >
+                    + Add Level
+                  </button>
+                  {levels.slice().reverse().map(levelId => (
+                    <div
+                      key={levelId}
+                      className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors border-b border-[var(--color-blender-border)] last:border-b-0 ${activeLevel === levelId ? 'bg-indigo-600/20 shadow-[inset_0_0_12px_rgba(79,70,229,0.3)]' : 'hover:bg-white/5'
+                        }`}
+                      onClick={() => setActiveLevel(levelId)}
                     >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                      <span className={`text-xs font-bold tracking-wide ${activeLevel === levelId ? 'text-indigo-300' : 'text-gray-300'}`}>
+                        Level {levelId}
+                      </span>
+                      {levels.length > 1 && (
+                        <button
+                          onClick={(e) => handleDeleteLevel(e, levelId)}
+                          className="text-gray-500 hover:text-red-400 transition-colors p-1"
+                          title="Delete Level"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {Array.from({ length: parameters.oceanTaperLevels }).reverse().map((_, i) => {
+                    const levelId = parameters.oceanTaperLevels - i;
+                    return (
+                      <div
+                        key={levelId}
+                        className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors border-b border-[var(--color-blender-border)] last:border-b-0 ${activeLevel === levelId ? 'bg-indigo-600/20 shadow-[inset_0_0_12px_rgba(79,70,229,0.3)]' : 'hover:bg-white/5'
+                          }`}
+                        onClick={() => setActiveLevel(levelId)}
+                      >
+                        <span className={`text-xs font-bold tracking-wide ${activeLevel === levelId ? 'text-indigo-300' : 'text-gray-300'}`}>
+                          Depth Layer {levelId}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
 
@@ -1162,7 +1829,7 @@ export default function MapPreview({
             className="flex items-center gap-2 bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-full px-4 py-2 shadow-lg hover:bg-white/5 transition-colors"
           >
             <Layers className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-200">Levels</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-200">{activeSelection?.type === 'ocean' ? 'Depths' : 'Levels'}</span>
           </button>
         </div>
       )}

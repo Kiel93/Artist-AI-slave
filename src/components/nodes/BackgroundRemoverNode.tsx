@@ -5,7 +5,7 @@ import { removeBackground as imglyRemoveBackground } from "@imgly/background-rem
 
 export default function BackgroundRemoverNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "processing" | "succeeded" | "failed">("idle");
-  const [resultUrl, setResultUrl] = useState<string | null>(data.resultUrl || null);
+  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
   const [error, setError] = useState<string | null>(null);
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
@@ -22,7 +22,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        inputImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
       }
     });
 
@@ -37,7 +37,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
 
     try {
       // Create a blob from the input URL if it's not already
-      let blobSource: Blob | string = inputImageUrl;
+      const blobSource: Blob | string = inputImageUrl;
       
       const blob = await imglyRemoveBackground(blobSource, {
         progress: (key, current, total) => {
@@ -46,13 +46,69 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
         }
       });
 
-      const url = URL.createObjectURL(blob);
-      setResultUrl(url);
+      const reader = new FileReader();
+      const base64Url: string = await new Promise((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+
+      const trimmedBase64: string = await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(img, 0, 0);
+          
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+          let hasVisiblePixels = false;
+          
+          for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+              const alpha = data[(y * canvas.width + x) * 4 + 3];
+              if (alpha > 10) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+                hasVisiblePixels = true;
+              }
+            }
+          }
+          
+          if (!hasVisiblePixels) {
+            resolve(base64Url);
+            return;
+          }
+          
+          const padding = 10;
+          minX = Math.max(0, minX - padding);
+          minY = Math.max(0, minY - padding);
+          maxX = Math.min(canvas.width - 1, maxX + padding);
+          maxY = Math.min(canvas.height - 1, maxY + padding);
+          
+          const width = maxX - minX + 1;
+          const height = maxY - minY + 1;
+          const trimmedCanvas = document.createElement("canvas");
+          trimmedCanvas.width = width;
+          trimmedCanvas.height = height;
+          const tCtx = trimmedCanvas.getContext("2d")!;
+          tCtx.putImageData(ctx.getImageData(minX, minY, width, height), 0, 0);
+          resolve(trimmedCanvas.toDataURL("image/png"));
+        };
+        img.src = base64Url;
+      });
+
+      setOutputImage(trimmedBase64);
       setStatus("succeeded");
       
       setNodes(nds => nds.map(n => n.id === id ? { 
         ...n, 
-        data: { ...n.data, resultUrl: url, imageUrl: url } 
+        data: { ...n.data, outputImage: trimmedBase64 } 
       } : n));
 
     } catch (err: any) {
@@ -87,8 +143,8 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
             backgroundSize: '20px 20px'
           }}
         >
-          {resultUrl ? (
-            <img src={resultUrl} className="w-full h-full object-contain" alt="Background Removed" />
+          {outputImage ? (
+            <img src={outputImage} className="w-full h-full object-contain" alt="Background Removed" />
           ) : (
             <>
               {status === 'processing' ? (
@@ -116,11 +172,25 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
             <Play className="w-4 h-4 fill-current" />
             PROCESS
           </button>
+          {outputImage && (
+            <button
+              onClick={() => {
+                const a = document.createElement('a');
+                a.href = outputImage;
+                a.download = `bg-removed-${id}.png`;
+                a.target = '_blank';
+                a.click();
+              }}
+              className="nodrag flex-1 py-2 bg-gray-700/80 hover:bg-gray-600 border border-gray-500/50 text-white text-[10px] font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-1"
+            >
+              DOWNLOAD
+            </button>
+          )}
         </div>
       </div>
 
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-8px]" style={{ top: '50%' }} />
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" style={{ top: '50%' }} />
+      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none" style={{ top: '50%' }} />
+      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none" style={{ top: '50%' }} />
     </div>
   );
 }

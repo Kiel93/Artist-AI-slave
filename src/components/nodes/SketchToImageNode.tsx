@@ -8,12 +8,12 @@ export default function SketchToImageNode({ id, data, selected }: { id: string; 
   const { setNodes } = useReactFlow();
 
   useEffect(() => {
-    if (data.text !== SKETCH_PROMPT) {
+    if (data.outputText !== SKETCH_PROMPT) {
       setNodes((nds) =>
-        nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, text: SKETCH_PROMPT } } : n))
+        nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, outputText: SKETCH_PROMPT } } : n))
       );
     }
-  }, [id, data.text, setNodes]);
+  }, [id, data.outputText, setNodes]);
 
   return (
     <div className={`w-64 bg-[#1a1525] rounded-lg shadow-2xl transition-all duration-200 relative ${
@@ -34,7 +34,7 @@ export default function SketchToImageNode({ id, data, selected }: { id: string; 
         type="source"
         position={Position.Right}
         id="text"
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0"
+        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !right-[-10px]"
       />
     </div>
   );

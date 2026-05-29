@@ -1,0 +1,39 @@
+Map Building Mechanism in "Farm Adventure 3"
+
+1. How the Grid Works
+The game uses a unified 2D grid logic overlaid on an isometric 3D space, governed primarily by `GridBuildSystem.cs`. It utilizes Unity's built-in `GridLayout` and `Tilemap` system.
+The system maintains several specific Tilemaps:
+- `buildableTileMap`: An invisible map defining where objects can be placed.
+- `tempTileMap`: A visual feedback map (green/red tiles) used during object placement.
+- `prefabTileMap`, `decorationTileMap`, `cloudTileMap`, `roadTileMap`: Separate layers for organizing static scene objects.
+The availability of tiles is managed in memory using a 2D array of HashSets (`occupiedTiles`), where each grid coordinate tracks which `GameObject`s currently occupy it.
+
+2. Required Resources for Map Building
+The game requires JSON configuration files formatted as `MAPCONFIG_{mapId}.json` stored in the `Resources` folder. 
+This JSON defines the level layout via the `MapConfig` class, which includes arrays for:
+- `ground`: Base terrain tiles (`GridItem`).
+- `minerals`: Obstacles, trees, and resources (`GridItem`).
+- `decor`: Placed decorations (`WorldItem`).
+- `buildings`: Map structures (`GridItem`).
+- `clouds` / `fakeClouds`: Environment effects.
+At runtime, it relies heavily on Unity's `Addressables` system to load prefabs asynchronously based on their `id` (e.g., loading `Tree_1.prefab` for an object with id "Tree_1").
+
+3. How Assets Are Placed
+Asset placement is handled in two distinct phases:
+- Editor/Build Time: `MapToolHelperEditor.cs` loads the `MAPCONFIG_{mapId}.json`, clears the existing Tilemaps, and repaints them using `SetTile` with appropriate `TileBase` assets matching the asset IDs.
+- Runtime (Gameplay): `MapManager.cs` takes over. It reads the user's `MapState` (which contains runtime additions like planted farms or user-placed buildings). It uses `Addressables.InstantiateAsync` to spawn GameObjects natively into the scene hierarchy under specific parent transforms (e.g., `BuildingManager.Instance.GetGridObjectParent<Decoration>()`).
+
+4. Determining Asset Grid Size (Footprints)
+Asset footprints are not stored centrally in the map JSON; they are defined on the prefabs themselves.
+Every grid-aligned object inherits from the `GridObject.cs` base class. This class exposes an `area` property of type `GridBound`.
+- `GridBound` is a struct holding a `position` (Vector2Int) and a `size` (Vector2Int).
+- The `size` is manually defined in the Unity Inspector for each prefab.
+- When a `GridObject` initializes, it calls `SubscribeOccupiedTiles()`. This method iterates over all coordinates calculated by `area.AllPositionsWithin` and registers the GameObject into the `GridBuildSystem`'s `occupiedTiles` HashSet array, effectively blocking other objects from being placed on those tiles.
+
+5. Defining "Buildable" Zones
+Buildable regions are dictated by a combination of `ZoneConfig` and the `buildableTileMap`.
+- The JSON contains a `ZoneConfig` structure, holding multiple `ZoneData` definitions.
+- Each `ZoneData` maps a `zoneId` to a list of exact coordinates (`positionsWithin` using `Vector2IntSerializable`).
+- At runtime, `GridBuildSystem.IsTilePlaceable(cellPos)` checks two conditions to allow placement:
+  1. The tile on the `buildableTileMap` at the requested coordinate must equal the predefined `buildableTileBase` asset.
+  2. The `occupiedTiles` HashSet for that coordinate must be exactly 0 (no `GridObject`s are currently claiming it).

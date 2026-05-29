@@ -1,0 +1,76 @@
+# Ocean Tiling & Foam Connection Rules
+# This document defines the legal connections for the 14 isometric foam tiles and Center/Water tiles.
+# It is designed to be used for a validation pass or Wave Function Collapse (WFC) system.
+
+## 1. Edge Profiles
+Each tile has 4 isometric edges: [NorthWest, NorthEast, SouthEast, SouthWest].
+The possible states for an edge are:
+- `W`: Water (Deep ocean, connects to LowerDepth or other W edges)
+- `L`: Land (Connects to ground tiles or other L edges)
+- `F`: Foam (Connects to the foam edge of adjacent foam tiles)
+
+### Edge Tiles (Straight Coasts)
+- `Tile_Edge_NorthWest` : [W, F, L, F] (Faces NW)
+- `Tile_Edge_NorthEast` : [F, W, F, L] (Faces NE)
+- `Tile_Edge_SouthEast` : [L, F, W, F] (Faces SE)
+- `Tile_Edge_SouthWest` : [F, L, F, W] (Faces SW)
+
+### Outer Corners (Convex Coasts)
+- `Tile_OutterCorner_North` : [W, W, F, F] (Points NW & NE)
+- `Tile_OutterCorner_East`  : [F, W, W, F] (Points NE & SE)
+- `Tile_OutterCorner_South` : [F, F, W, W] (Points SE & SW)
+- `Tile_OutterCorner_West`  : [W, F, F, W] (Points SW & NW)
+
+### Inner Corners (Concave Coasts / Bays)
+- `Tile_InnerCorner_North` : [W, F, L, F] (Water is NW)
+- `Tile_InnerCorner_East`  : [F, W, F, L] (Water is NE)
+- `Tile_InnerCorner_South` : [L, F, W, F] (Water is SE)
+- `Tile_InnerCorner_West`  : [F, L, F, W] (Water is SW)
+
+### Fill Tiles
+- `Tile_Center`     : [F/L, F/L, F/L, F/L] (Solid foam/land, no water edges)
+- `Tile_LowerDepth` : [W, W, W, W] (Deep water, no land/foam edges)
+
+---
+
+## 2. Adjacency Rules
+For any two adjacent tiles A and B, their touching edges MUST match perfectly.
+- A's SouthEast edge connects to B's NorthWest edge.
+- A's SouthWest edge connects to B's NorthEast edge.
+
+**Rule 1: Strict Edge Matching**
+- `F` must connect to `F`.
+- `W` must connect to `W`.
+- `L` must connect to `L`.
+
+**Rule 2: Corner Resolution**
+- An `InnerCorner` and an `Edge` facing the same direction share the exact same edge profile (e.g., `InnerCorner_South` and `Edge_SouthEast` are both `[L, F, W, F]`). The engine must differentiate them based on the **diagonal** neighbor (the `dCode`). If the diagonal is water, it's an `InnerCorner`; otherwise, it's an `Edge`.
+
+---
+
+## 3. Pruning & Cleanup Logic (Fixing Illegal Artifacts)
+
+### A. The "Floating Center" Fix
+**Issue**: 1x1 `Tile_Center` foam tiles floating in the middle of the ocean.
+**Cause**: The `isPaintedAndPruned` flag forces a `Tile_Center` where the user painted, even if the auto-smoother completely deleted the island, leaving it isolated.
+**Logic Fix**: 
+A `Tile_Center` is ONLY legal if it connects to at least one `F` or `L` edge. 
+If a cell evaluates to `Tile_Center` but its 4 orthogonal neighbors (NW, NE, SE, SW) are all `Tile_LowerDepth` (Water), it MUST be downgraded to `Tile_LowerDepth`.
+
+### B. The "Orphaned Foam" Fix
+**Issue**: Foam tiles that don't connect logically (e.g. an OuterCorner connected to deep water).
+**Cause**: Grid generation edge cases where distances calculate to `1` but the adjacent tile calculates to `>1`.
+**Logic Fix**:
+Run a verification pass over the `maskToDraw` grid:
+1. For every cell, check its assigned profile.
+2. If its SouthEast edge is `F`, verify that its SouthEast neighbor's NorthWest edge is ALSO `F`.
+3. If there is a mismatch (e.g., `F` connecting to `W`), the tile is illegal. The tile should either fallback to an `Edge` tile that resolves the connection, or be deleted to `LowerDepth`.
+
+### C. Mismatched U-Shape Pocket Corners
+**Issue**: Visual tearing when forcing `InnerCorner_South` next to `InnerCorner_West`.
+**Cause**: `InnerCorner_South` has SE edge = `W`. `InnerCorner_West` has SW edge = `W`. If placed adjacent, their touching edges (East of South goes to West of West) might conflict.
+**Logic Fix**:
+If forcing a pocket override, ensure the surrounding 4 tiles explicitly form a closed loop:
+`[Inner_S] [Inner_W]`
+`[Outer_S] [Outer_W]`
+Their internal edges must all be `F` to connect smoothly. If the specific PNG assets do not align well visually, we may need to define a dedicated `Tile_Pocket_U` asset or fallback to a standard `Edge` configuration that avoids inner corners entirely.

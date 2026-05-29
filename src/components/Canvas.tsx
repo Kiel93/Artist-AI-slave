@@ -22,7 +22,7 @@ import PromptNode from "./nodes/PromptNode";
 import PromptConnectorNode from "./nodes/PromptConnectorNode";
 import StyleInsertNode from "./nodes/StyleInsertNode";
 import ReferenceImageNode from "./nodes/ReferenceImageNode";
-import PlenxAIOutputNode from "./nodes/PlenxAIOutputNode";
+import GeneralImageGenerationNode from "./nodes/GeneralImageGenerationNode";
 import GeminiRefinerNode from "./nodes/GeminiRefinerNode";
 import SketchToImageNode from "./nodes/SketchToImageNode";
 import IsometricDrawNode from "./nodes/IsometricDrawNode";
@@ -31,6 +31,7 @@ import TilesetGeneratorNode from "./nodes/TilesetGeneratorNode";
 import IsometricHexSlicerNode from "./nodes/IsometricHexSlicerNode";
 import BackgroundRemoverNode from "./nodes/BackgroundRemoverNode";
 import AssetGeneratorNode from "./nodes/AssetGeneratorNode";
+import TileCutterNode from "./nodes/TileCutterNode";
 
 const nodeTypes = {
   prompt: PromptNode,
@@ -38,7 +39,7 @@ const nodeTypes = {
   styleInsert: StyleInsertNode,
   referenceImage: ReferenceImageNode,
   geminiRefiner: GeminiRefinerNode,
-  plenxAiOutput: PlenxAIOutputNode,
+  generalImageGeneration: GeneralImageGenerationNode,
   sketchToImage: SketchToImageNode,
   isometricDraw: IsometricDrawNode,
   imageExplained: ImageExplainedNode,
@@ -46,6 +47,7 @@ const nodeTypes = {
   isometricHexSlicer: IsometricHexSlicerNode,
   backgroundRemover: BackgroundRemoverNode,
   assetGenerator: AssetGeneratorNode,
+  tileCutter: TileCutterNode,
 };
 
 const getId = () => `node_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -62,8 +64,8 @@ const initialNodes: Node[] = [
     data: { text: "A futuristic city with neon lights" },
   },
   {
-    id: "plenxai-1",
-    type: "plenxAiOutput",
+    id: "generalImageGen-1",
+    type: "generalImageGeneration",
     position: { x: 800, y: 200 },
     data: {},
   },
@@ -71,11 +73,11 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [
   {
-    id: "e-gemini-plenxai",
+    id: "e-gemini-gen",
     source: "gemini-1",
-    target: "plenxai-1",
+    target: "generalImageGen-1",
     animated: false,
-    style: { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: '5 5' },
+    style: { stroke: "#10b981", strokeWidth: 2, strokeDasharray: '5 5' },
   },
 ];
 
@@ -150,8 +152,12 @@ export default function Canvas({ taskId }: CanvasProps) {
       if (task) {
         setTaskName(task.name);
         if (task.nodes && task.nodes.length > 0) {
-          // Migration: Rename 'idea' nodes to 'prompt'
-          const migratedNodes = task.nodes.map(n => n.type === 'idea' ? { ...n, type: 'prompt' } : n);
+          // Migration: Rename 'idea' to 'prompt', 'plenxAiOutput' to 'generalImageGeneration'
+          const migratedNodes = task.nodes.map(n => {
+            if (n.type === 'idea') return { ...n, type: 'prompt' };
+            if (n.type === 'plenxAiOutput') return { ...n, type: 'generalImageGeneration' };
+            return n;
+          });
           setNodes(migratedNodes);
           setEdges(task.edges || []);
           
@@ -176,7 +182,7 @@ export default function Canvas({ taskId }: CanvasProps) {
       const isImageInput = params.sourceHandle === 'image';
       const isTextInput = params.sourceHandle === 'text';
       
-      let finalParams = { ...params };
+      const finalParams = { ...params };
       
       // Handle dynamic Prompt Connector connection
       if (params.targetHandle === 'text-plus') {
@@ -354,7 +360,7 @@ export default function Canvas({ taskId }: CanvasProps) {
       const tHandle = connection.targetHandle || '';
 
       const isSourceText = sHandle.includes('text');
-      const isTargetText = tHandle.includes('text');
+      const isTargetText = tHandle.includes('text') || tHandle.includes('style');
       const isSourceImage = sHandle.includes('image');
       const isTargetImage = tHandle.includes('image');
 

@@ -1,0 +1,69 @@
+[Example ocean tiles]
+
+X A B C X
+A E F G C
+H F F F K
+I J F M N
+X I O N X 
+
+X - Tile_LowerDepth
+A - Tile_OutterCorner_North
+B - Tile_Edge_NorthEast
+C - Tile_OutterCorner_East
+E - Tile_InnerCorner_North
+F - Tile_Center
+G - Tile_InnerCorner_East
+H - Tile_Edge_NorthWest
+K - Tile_Edge_SouthEast
+I - Tile_OutterCorner_West
+J - Tile_InnerCorner_West
+M - Tile_InnerCorner_South
+N - Tile_OutterCorner_North
+O - Tile_Edge_SouthWest
+
+White pixel - current depth.
+Black pixel - lower depth.
+
+Tapering logic: Use these B&W images to darken the pixels of lower depths with black pixels, making a smooth transition for ocean tapering, while preserve the shade of current depth with white pixels.
+
+
+[Auto smoothing]
+
+Get rid of peninsulas and thin 1x land strip
+
+0 0 0	    0 0 0
+0 1 0	>   0 0 0
+1 1 1	    1 1 1
+
+
+[Ocean Tile/Foam Tile Offset (Visual Depth Alignment)]
+
+A critical component of the isometric rendering math involves aligning 3D ground blocks with 2D ocean planes.
+
+### The Problem
+The ground tiles are 3D blocks (e.g., `280x280` or `140x140` pixels) that possess actual simulated height (70 pixels). Because of this vertical height, the "root" (the bottom of the dirt block) is actually 70 pixels lower than the top surface. 
+
+However, the ocean tiles are strictly flat 2D top-faces (e.g., `280x140` or `140x70` pixels). When the rendering engine calculates the grid coordinate for a ground tile and places it at `(isoX, isoY)`, it places the *entire* 3D block there. Because the coordinate system doesn't account for the intrinsic height baked into the PNG, the flat 2D ocean tiles become visually misaligned (they appear to float or sit too high relative to the visual top of the ground block).
+
+### The Mathematical Solution
+To match the ground tiles and ocean tiles visually, the ocean tiles must be physically shifted downwards on the screen by exactly the height of the ground block (70 pixels).
+
+In isometric mathematics:
+- Moving **1 tile Eastward** (`+1` to column) shifts the screen position `+X` and `+Y`.
+- Moving **1 tile Southward** (`+1` to row) shifts the screen position `-X` and `+Y`.
+
+When both are combined (`+1` column AND `+1` row):
+- The `X` shift cancels out completely.
+- The `Y` shift stacks, moving the tile straight down the screen by exactly `2 * tileHalfHeight` (which equals the 70px height of the block).
+
+Therefore, to properly anchor the flat 2D ocean face to the bottom "root" of the 3D ground blocks, we offset the ocean tiles **one tile southward and one tile eastward** in grid space. This flawlessly compensates for the baked-in height of the ground assets without requiring complex pixel-level offsets in the rendering loop.
+
+[Ocean Foam]
+
+Ocean foam, visually, is a line of colored ocean tiles that hug around the ground tiles/islands.
+How we achieve it:
+- We make a layer of foam tiles and put it under the ground tiles. This is done by generate foam tiles similar to ocean tiles at 1 tile distance to the nearest ground tile. We will be using images in Foamtiles folder instead.
+- We put said foam layer right under ground tiles and above ocean depth 0 tiles.
+- We let the user adjust the foam color from ocean settings.
+- Auto smoothing logic is also applied to the foam layer.
+

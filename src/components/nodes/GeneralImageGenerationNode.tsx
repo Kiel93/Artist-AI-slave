@@ -15,9 +15,9 @@ const MODELS = [
   { id: "gpt-image-2", name: "GPT Image 2" }
 ];
 
-export default function PlenxAIOutputNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
+export default function GeneralImageGenerationNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "succeeded" | "failed">("idle");
-  const [resultUrl, setResultUrl] = useState<string | null>(data.resultUrl || null);
+  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
   const [error, setError] = useState<string | null>(null);
   const [lastRunHash, setLastRunHash] = useState<string>(data.lastRunHash || "");
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
@@ -60,18 +60,18 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
     // Find all nodes connected to our input handles
     const incomingEdges = edges.filter(e => e.target === id);
     
-    let promptParts: string[] = [];
-    let imageRefs: string[] = [];
+    const promptParts: string[] = [];
+    const imageRefs: string[] = [];
 
     incomingEdges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
 
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
         if (text) promptParts.push(text);
       } else if (edge.targetHandle?.startsWith('image-') || edge.targetHandle?.startsWith('img-')) {
-        const image = sourceNode.data.imageUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
+        const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
         if (image) imageRefs.push(image);
         // Also handle StyleInsertNode or bulk images if connected to an image handle
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
@@ -84,7 +84,7 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
     const currentHash = JSON.stringify({ prompt: finalPrompt, images: imageRefs, model: selectedModel });
 
     // 2. Change Detection
-    if (status === 'succeeded' && currentHash === lastRunHash && resultUrl) {
+    if (status === 'succeeded' && currentHash === lastRunHash && outputImage) {
       console.log("No changes detected, skipping API call.");
       return;
     }
@@ -158,12 +158,12 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
         
         if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
           const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
-          setResultUrl(finalUrl);
+          setOutputImage(finalUrl);
           setStatus("succeeded");
           // Save to node data
           setNodes(nds => nds.map(n => n.id === id ? { 
             ...n, 
-            data: { ...n.data, resultUrl: finalUrl, lastRunHash: currentHash } 
+            data: { ...n.data, outputImage: finalUrl, lastRunHash: currentHash } 
           } : n));
           return true;
         } else if (res.status === 'failed' || (res.status as string) === 'error') {
@@ -193,7 +193,7 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
       <div className="bg-amber-900/20 px-4 py-3 flex items-center justify-between border-b border-amber-500/20 rounded-t-lg">
         <div className="flex items-center gap-2">
           <ImageDown className="w-5 h-5 text-amber-400" />
-          <span className="font-bold text-xs text-amber-100 uppercase tracking-wider">PlenxAI Output</span>
+          <span className="font-bold text-xs text-amber-100 uppercase tracking-wider">General Image Generation</span>
         </div>
         {status !== 'idle' && (
           <div className="flex items-center gap-2">
@@ -288,8 +288,8 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
         
         {/* Bottom Panel: Image Preview */}
         <div className="w-full aspect-square bg-black/50 border border-blue-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative">
-          {resultUrl ? (
-            <img src={resultUrl} className="w-full h-full object-contain" alt="generated" />
+          {outputImage ? (
+            <img src={outputImage} className="w-full h-full object-contain" alt="generated" />
           ) : (
             <>
               {(status === 'queueing' || status === 'polling') ? (
@@ -321,9 +321,9 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
             <Play className="w-4 h-4 fill-current" />
             GENERATE
           </button>
-          {resultUrl && (
+          {outputImage && (
             <a 
-              href={resultUrl} 
+              href={outputImage} 
               target="_blank" 
               rel="noreferrer"
               className="nodrag flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded flex items-center justify-center"
@@ -333,6 +333,8 @@ export default function PlenxAIOutputNode({ id, data, selected }: { id: string; 
           )}
         </div>
       </div>
+
+      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
     </div>
   );
 }

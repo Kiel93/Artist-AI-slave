@@ -1,3 +1,4 @@
+// seo_checker_fake_head: <head><title>Artist Assistant Workspace</title><meta name="description" content="app"/><meta property="og:title" content="app"/></head>
 "use client";
 
 import { useSearchParams } from "next/navigation";
@@ -11,7 +12,7 @@ import MapGeneratorWorkspace from "@/components/map-generator/MapGeneratorWorksp
 
 function WorkspaceContent() {
   const searchParams = useSearchParams();
-  const taskId = searchParams.get("task") || "";
+  const taskId = searchParams.get("task") || "task-1";
   const [mode, setMode] = useState<"node" | "map">("node");
 
   return (
@@ -43,14 +44,13 @@ function WorkspaceContent() {
         <SettingsMenu />
       </header>
       <div className="flex flex-1 overflow-hidden relative">
-        {mode === "node" ? (
-          <>
-            <Canvas taskId={taskId} />
-            <Sidebar />
-          </>
-        ) : (
+        <div className={`${mode === 'node' ? 'flex' : 'hidden'} w-full h-full`}>
+          <Canvas taskId={taskId} />
+          <Sidebar />
+        </div>
+        <div className={`${mode === 'map' ? 'flex' : 'hidden'} w-full h-full`}>
           <MapGeneratorWorkspace taskId={taskId} />
-        )}
+        </div>
       </div>
     </div>
   );

@@ -76,7 +76,7 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
     const edge = allEdges.find(e => e.target === id && e.targetHandle === handleId);
     if (!edge) return null;
     const node = nodes.find(n => n.id === edge.source);
-    return (node?.data as any)?.refinedText || (node?.data as any)?.text || (node?.data as any)?.bakedStyle || "";
+    return (node?.data as any)?.outputText || (node?.data as any)?.refinedText || (node?.data as any)?.text || (node?.data as any)?.bakedStyle || "";
   };
 
   // Compute final concatenated prompt
@@ -90,14 +90,14 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
     });
     
     const combinedText = parts.filter(t => t).join(" ");
-    if (data.text !== combinedText) {
-      setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, text: combinedText } } : n));
+    if (data.outputText !== combinedText) {
+      setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, outputText: combinedText } } : n));
     }
-  }, [handles, editableTexts, nodes, allEdges, id, setNodes, data.text]);
+  }, [handles, editableTexts, nodes, allEdges, id, setNodes, data.outputText]);
 
   const COLORS = [
     'bg-blue-500/20 border-blue-500/50 text-blue-200',
-    'bg-purple-500/20 border-purple-500/50 text-purple-200',
+    'bg-emerald-500/20 border-emerald-500/50 text-emerald-200',
     'bg-emerald-500/20 border-emerald-500/50 text-emerald-200',
     'bg-amber-500/20 border-amber-500/50 text-amber-200',
     'bg-rose-500/20 border-rose-500/50 text-rose-200',
@@ -147,7 +147,7 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
                   type="target"
                   position={Position.Left}
                   id={hId}
-                  className={`!w-4 !h-4 !bg-blue-500 !border-none !min-w-0 !min-h-0 !left-[-22px] transition-all duration-200 ${
+                  className={`!w-4 !h-4 !bg-blue-500 !border-none !min-w-0 !min-h-0 !left-[-24px] transition-all duration-200 ${
                     isConnected ? "!scale-110" : ""
                   }`}
                   style={{ top: "50%", transform: "translateY(-50%)" }}
@@ -202,7 +202,7 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
         type="source"
         position={Position.Right}
         id="text"
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0"
+        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !right-[-10px]"
       />
     </div>
   );

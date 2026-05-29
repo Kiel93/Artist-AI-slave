@@ -1,0 +1,50 @@
+FARM ADVENTURE - MAP EXPORT & GENERATION WALKTHROUGH
+
+This guide explains how to export your generated map from the web tool and automatically construct the 3D island inside your Unity Editor.
+
+-------------------------------------------------------------------
+STEP 1: EXPORT THE MAP
+-------------------------------------------------------------------
+1. Open your web-based Map Generator tool.
+2. Configure your map (size, seed, objects, etc.) to your liking.
+3. Click the "Export to Unity" button.
+4. Save the downloaded `.zip` file to your computer.
+
+-------------------------------------------------------------------
+STEP 2: IMPORT ASSETS INTO UNITY
+-------------------------------------------------------------------
+1. Extract the downloaded `.zip` file.
+2. Open your Unity Project (Farm Adventure).
+3. Drag and drop the extracted `Textures` folder into your Unity project (e.g., inside `Assets/Textures`).
+   - This folder contains all generated Ground, Mineral, and Ocean sprites.
+4. Drag and drop the `MapConfig.json` file into your Unity project (e.g., inside `Assets/Data`).
+5. Drag and drop the `ApplyMapConfigEditor.cs` script into an `Editor` folder in your Unity project (e.g., `Assets/Editor`).
+   - If you don't have an `Editor` folder, create one. This is required for the tool to work.
+
+-------------------------------------------------------------------
+STEP 3: PREPARE YOUR SCENE
+-------------------------------------------------------------------
+Before running the generator, ensure your active Unity scene has:
+1. A Grid with a Tilemap for the ground.
+   - Example: Hierarchy -> Create -> 2D Object -> Tilemap -> Rectangular. Name it "Ground Tilemap".
+2. An empty GameObject to hold all generated 3D objects.
+   - Example: Hierarchy -> Create Empty. Name it "Island Objects".
+3. A GridBuildSystem (your existing building system logic) if you want the buildable grid zone to be updated.
+
+-------------------------------------------------------------------
+STEP 4: GENERATE THE ISLAND
+-------------------------------------------------------------------
+1. In Unity's top menu bar, go to: Tools > Farm Adventure > Apply Map Config Edits.
+2. The Editor Window will appear with three fields:
+   - MapConfig JSON: Drag your imported `MapConfig.json` here.
+   - Ground Tilemap: Drag your scene's "Ground Tilemap" here.
+   - Objects Root: Drag your scene's "Island Objects" empty GameObject here.
+3. Click the "Apply Edits & Generate Map" button.
+
+WHAT HAPPENS NEXT:
+- The script reads all the tile and object positions from the JSON.
+- It scans your project for the generated ground sprites, automatically creates Unity Tile assets, and paints them perfectly onto your Ground Tilemap.
+- It finds your building and mineral Prefabs and spawns them at their exact grid coordinates, parented to the Objects Root.
+- It updates the footprint scale and internal buildable zones for your game logic.
+
+Check your scene view—your island is now fully built and ready for gameplay finetuning!

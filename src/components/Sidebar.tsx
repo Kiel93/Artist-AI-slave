@@ -42,7 +42,7 @@ const NODE_TYPES = [
   {
     type: "geminiRefiner",
     label: "Gemini Refiner",
-    icon: <Sparkles className="w-5 h-5 text-purple-400" />,
+    icon: <Sparkles className="w-5 h-5 text-emerald-400" />,
     description: "Central node: Refines inputs (Optional)",
   },
   {
@@ -52,10 +52,10 @@ const NODE_TYPES = [
     description: "Describe an image in detail",
   },
   {
-    type: "plenxAiOutput",
-    label: "PlenxAI Output",
-    icon: <ImageDown className="w-5 h-5 text-blue-400" />,
-    description: "Final generated image destination",
+    type: "generalImageGeneration",
+    label: "General Image Gen",
+    icon: <ImageDown className="w-5 h-5 text-amber-400" />,
+    description: "General image generation destination",
   },
   {
     type: "tilesetGenerator",
@@ -68,6 +68,12 @@ const NODE_TYPES = [
     label: "Hex Slicer",
     icon: <Scissors className="w-5 h-5 text-emerald-400" />,
     description: "Dice standard plot into tiles",
+  },
+  {
+    type: "tileCutter",
+    label: "Tile Cutter",
+    icon: <Scissors className="w-5 h-5 text-emerald-400" />,
+    description: "Cut custom ground tiles from images",
   },
   {
     type: "assetGenerator",

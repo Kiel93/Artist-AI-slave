@@ -8,16 +8,56 @@ User Input:
 Describe what is going on in this image in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image.
 
 [StyleInsertNode]
-Analyze the artistic style, color palette, lighting, and mood of these images. Create a concise 'Style Signature' (1-2 sentences) that can be used to replicate this style in other prompts.
+Analyze the attached image(s) and provide a high-density technical description of its art style. Your goal is to create a 'Style Bible' that another generative AI can follow to produce 100% consistent results.
+Structure the output into these specific categories:
+
+1. Shape Language & Geometry:
+Describe the silhouettes and forms. Are they 'chunky' and 'puffy' with rounded corners, or sharp and realistic?
+Define the line work: Is it bold and outlined, or borderless and painterly?
+
+2. Materiality & Texture:
+Describe how the surfaces react to light. Are they matte, glossy, metallic, or 'toy-like' plastic?
+Identify specific texture patterns (e.g., basalt rock with glowing lava veins, soft clay, or watercolor paper).
+
+3. Lighting & Rendering:
+Define the light source and intensity. Is there volumetric lighting, soft ambient occlusion in the crevices, or high-contrast rim lighting?
+Describe the shading technique: Soft gradients, cell-shading, or realistic ray-tracing?
+
+4. Color Palette & Saturation:
+Provide the primary color scheme (e.g., vibrant saturation with high-contrast glowing elements).
+Identify the 'Key' and 'Fill' colors used for shadows.
+
+Output Format:
+Provide the final result as a single, comma-separated list of Technical Tokens followed by a structured Reference Paragraph, up to 500 words.
 
 [AssetGeneratorNode]
-You are an artist in the game industry. Generate {object} that would visually match and perfectly sit in the middle of this island. Isolate the {object} and make the background magenta for color keying (#FF00FF). IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE COMPONENTS FROM REFERENCE IN THE GENERATED IMAGE. USE THe IMAGE 2 AS REFERENCE FOR THE {object}.
+You are an artist in the game industry. Generate {object} that would visually match and perfectly sit in the middle of the island in image 1. Isolate the {object} and make the background magenta for color keying (#FF00FF). IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE COMPONENTS FROM REFERENCE IN THE GENERATED IMAGE. USE THe IMAGE 2 AS REFERENCE FOR THE {object}.
 Subject: A single isolated {object} rendered in a strict 30-degree isometric perspective.
 Style: {style}
 Composition: The {object} must be centered, filling 70% of the canvas. DO NOT include the island base or any terrain from the reference image. Generate the {object} as a standalone floating sprite.
 Technical Output: Place the object on a solid, flat magenta background (#FF00FF). IMPORTANT: Ensure there are no ground shadows, no floor planes, and no "color spill" or magenta glow reflected onto the object. The edges must be sharp and clean for pixel extraction.
-Reference: {reference image}.
+Base island: image 1.
+Reference/sketch: image 2.
 Spec: resolution:{resolution}. ratio 1:1.
 
 [TilesetGeneratorNode]
- (CRUCIAL INSTRUCTION: You must strictly adhere to the exact 3D geometry and isometric silhouette of the provided reference blueprint image. Do not alter the outer shape or boundaries. Render the complete island consisting of 13 tokenized tiles and the standalone reference cube. The output must match the reference aspect ratio exactly. DO NOT add padding or borders. Additionally: 1. The top ground surface of the tiles MUST be left completely plain with no noticeable details or large features that cross tile boundaries, or it must use a perfectly seamless uniform texture. 2. The reference cube at the bottom MUST have its side faces rendered as a plain, darker tone texture without any standing out details or complex patterns.)
+You are a technical game artist. Your task is to re-skin the provided reference image, {1x1_Island_Default.jpg}, into a new game-ready island base while maintaining a 1:1 pixel-perfect silhouette match. IMPORTANT: make the surface texture smooth, or subtle, avoid adding noticable detail to make the tiling seamless.
+
+1. Structural Integrity:
+The X-Island: Generate the upper X-shaped structure as a cohesive island base. This structure must perfectly align with the 13-component tile layout seen in {1x1_Island_Default.jpg}. The top surface and the vertical rocky side-walls must stay within the exact geometric boundaries of the reference.
+The Component Block: Generate the single isolated island cell directly below the main island. This block must match the material of the main island and sit in the identical pixel coordinates as the reference block in {1x1_Island_Default.jpg}.
+
+2. Dynamic Theme & Style:
+THEME: {theme}
+ARTSTYLE: {style}
+Visual DNA: Apply the specified {theme} to all surfaces. Use the {style} to dictate the shape language (e.g., chunky/puffy edges, soft gradients, or specific texture detailing). Match the lighting logic—including highlight and shadow directions—to ensure the 13 components can be tiled seamlessly.
+
+3. Masking & Extraction Constraints:
+Background: Fill all non-object space with a flat, solid black (000000).
+No Artifacts: DO NOT include any ground shadows, floor planes, horizon lines, or atmospheric effects.
+No Spill: Ensure there is no magenta light reflected onto the island rocks or surfaces. Edges must be sharp and aliased to the object boundary.
+
+4. Final Specs:
+Reference: {1x1_Island_Default.jpg}
+Resolution: {resolution} (1:1 Ratio)
+View: Strict 30-degree isometric.

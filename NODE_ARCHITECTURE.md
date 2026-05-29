@@ -44,7 +44,18 @@ Consistency in color helps users identify data types at a glance:
 
 ---
 
-## 3. Dynamic Handle Spawning (The "+" Pattern)
+## 3. UI Element Aesthetics (Universal Components)
+To ensure all nodes feel like they belong to a cohesive application, adhere to the following Tailwind/CSS structural rules for internal UI elements:
+
+*   **Buttons**: Should be chunky and tactile. Use `py-2 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 transition-all`. The background color must match the node's semantic color (e.g., `bg-emerald-600 hover:bg-emerald-500` for Image nodes).
+*   **Text Inputs / Textareas**: Should sit recessed within the node. Use `bg-black/40 text-gray-200 p-2 rounded border border-[semantic-color]/20 focus:border-[semantic-color]/60 focus:outline-none`.
+*   **Sliders (Range Inputs)**: Use `w-full accent-[semantic-color]-500` for native HTML range inputs to match the node's theme.
+*   **Icons**: Always use `lucide-react` icons. Give them a standardized size (e.g., `w-5 h-5` for headers, `w-4 h-4` for inline buttons) and tint them with the node's semantic color (e.g., `text-emerald-400`).
+*   **Handle Sizing & Position**: ReactFlow handles should be prominent but clean. Override default classes with `!w-4 !h-4 !border-none`. Do NOT manually offset handles with `!left-` or `!right-` classes. Let React Flow's native positioning snap them perfectly to the left and right edges.
+
+---
+
+## 4. Dynamic Handle Spawning (The "+" Pattern)
 For nodes that act as "Connectors" or "Analyzers" and can take multiple inputs:
 
 1.  **The Plus Handle**: Add a special target handle with ID `[type]-plus` (e.g., `text-plus` or `image-plus`).
@@ -52,7 +63,7 @@ For nodes that act as "Connectors" or "Analyzers" and can take multiple inputs:
 3.  **Logic**: `Canvas.tsx` listens for connections to these handles. When triggered, it generates a new unique ID (e.g., `text-dyn-1234`) and adds it to the node's `data` (e.g., `data.handles` or `data.imageInputs`).
 4.  **Auto-Cleanup**: Nodes should monitor their connections via `useEdges` and remove dynamic handles that are no longer connected and haven't been "ever used."
 
-## 4. Handle Labels & Context
+## 5. Handle Labels & Context
 For any node that receives input data via Target handles, the purpose of each handle MUST be clearly labeled within the node UI if it is not immediately obvious (e.g. adjacent to an input box where the connection implies the input value). 
 *   **Alignment**: The text label or input box should vertically align with its corresponding handle on the left edge.
 *   **Format**: Use small, muted text (e.g. `text-xs text-gray-400`) next to the handle indicating the expected input context, such as "Reference Image", "Style Image", or "Island Image".
@@ -61,9 +72,20 @@ For any node that receives input data via Target handles, the purpose of each ha
 
 ---
 
-## 5. State Management (Master Blueprint)
+## 6. State Management (Master Blueprint)
 Nodes in this project follow a "Master Blueprint" pattern:
 
-*   **Reactive Data**: Nodes should primarily drive their UI from the `data` prop.
-*   **Direct Updates**: When a node's internal state changes (e.g., user edits a text field or an API returns a result), the node must call `setNodes` from `useReactFlow` to update the global canvas state.
+*   **Reactive Data**: Nodes should primarily drive their UI from the `data` prop. Use controlled components (e.g., `value={data.text || ""}`) rather than uncontrolled ones (`defaultValue`).
+*   **Direct Updates**: When a node's internal state changes (e.g., user edits a text field or an API returns a result), the node must call `setNodes` from `useReactFlow` immediately (like inside `onChange` for inputs) to update the global canvas state and prevent UI resets.
 *   **Sync**: This ensures that when `Canvas.tsx` triggers a save to **IndexedDB**, the latest version of every node's content is captured.
+
+---
+
+## 7. Standardized Data Payloads (Inter-Node Communication)
+To prevent brittle, case-by-case property checking when nodes pass data to one another, all nodes MUST adhere to a universal naming convention for their primary outputs in the `data` object:
+
+*   **Image Output**: Any node that generates or outputs a primary image must store it as a Base64 Data URL or Blob URL under `data.outputImage`. (Legacy keys like `resultUrl`, `imageUrl`, or `bakedImage` should be migrated or mapped to `outputImage`).
+*   **Text Output**: Any node that generates or outputs primary text (prompts, analysis, styles) must store it under `data.outputText`.
+
+**Consuming Data**:
+When a node (like a Refiner or Output node) reads from incoming edges, it should confidently look for `sourceNode.data.outputImage` or `sourceNode.data.outputText` instead of checking a dozen different potential property names.

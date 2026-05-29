@@ -17,7 +17,7 @@ const MODELS = [
 
 export default function TilesetGeneratorNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "succeeded" | "failed">("idle");
-  const [resultUrl, setResultUrl] = useState<string | null>(data.resultUrl || null);
+  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
   const [error, setError] = useState<string | null>(null);
   const [lastRunHash, setLastRunHash] = useState<string>(data.lastRunHash || "");
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
@@ -35,36 +35,66 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
     const edges = getEdges();
     const incomingEdges = edges.filter(e => e.target === id);
     
-    let promptParts: string[] = [];
+    const promptParts: string[] = [];
     if (localPrompt) promptParts.push(localPrompt);
 
+    let styleInput = "";
     let inputImageUrl = "";
 
     incomingEdges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
         if (text) promptParts.push(text);
       }
+      if (edge.targetHandle === 'style') {
+        styleInput = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+      }
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        inputImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
       }
     });
 
-    const finalPrompt = promptParts.join(", ");
-    let systemConstraint = await fetchNodePrompt('TilesetGeneratorNode');
-    if (!systemConstraint) {
-      systemConstraint = " (CRUCIAL INSTRUCTION: You must strictly adhere to the exact 3D geometry and isometric silhouette of the provided reference blueprint image. Do not alter the outer shape or boundaries. Render the complete island consisting of 13 tokenized tiles and the standalone reference cube. The output must match the reference aspect ratio exactly. DO NOT add padding or borders. Additionally: 1. The top ground surface of the tiles MUST be left completely plain with no noticeable details or large features that cross tile boundaries, or it must use a perfectly seamless uniform texture. 2. The reference cube at the bottom MUST have its side faces rendered as a plain, darker tone texture without any standing out details or complex patterns.)";
+    const themePrompt = promptParts.join(", ") || "Fantasy terrain";
+    const styleString = styleInput || "Game art, isometric";
+
+    let baseApiPrompt = await fetchNodePrompt('TilesetGeneratorNode');
+    if (!baseApiPrompt) {
+      baseApiPrompt = `You are a technical game artist. Your task is to re-skin the provided reference image, {1x1_Island_Default.jpg}, into a new game-ready island base while maintaining a 1:1 pixel-perfect silhouette match.
+
+1. Structural Integrity:
+The X-Island: Generate the upper X-shaped structure as a cohesive island base. This structure must perfectly align with the 13-component tile layout seen in {1x1_Island_Default.jpg}. The top surface and the vertical rocky side-walls must stay within the exact geometric boundaries of the reference.
+The Component Block: Generate the single isolated island cell directly below the main island. This block must match the material of the main island and sit in the identical pixel coordinates as the reference block in {1x1_Island_Default.jpg}.
+
+2. Dynamic Theme & Style:
+THEME: {theme}
+ARTSTYLE: {style}
+Visual DNA: Apply the specified {theme} to all surfaces. Use the {style} to dictate the shape language (e.g., chunky/puffy edges, soft gradients, or specific texture detailing). Match the lighting logic—including highlight and shadow directions—to ensure the 13 components can be tiled seamlessly.
+
+3. Masking & Extraction Constraints:
+Background: Fill all non-object space with a flat, solid black (000000).
+No Artifacts: DO NOT include any ground shadows, floor planes, horizon lines, or atmospheric effects.
+No Spill: Ensure there is no neon green light reflected onto the island rocks or surfaces. Edges must be sharp and aliased to the object boundary.
+
+4. Final Specs:
+Reference: {1x1_Island_Default.jpg}
+Resolution: {resolution} (1:1 Ratio)
+View: Strict 30-degree isometric.`;
     }
-    const apiPrompt = finalPrompt + systemConstraint;
+
+    const apiPrompt = baseApiPrompt
+      .replace(/{theme}/g, themePrompt)
+      .replace(/{style}/g, styleString)
+      .replace(/{resolution}/gi, "2k")
+      .replace(/{1x1_Island_Default\.jpg}/gi, "the reference image");
     
     setApiPromptPreview(apiPrompt);
     setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, apiPromptPreview: apiPrompt } } : n));
 
     const currentHash = JSON.stringify({ prompt: apiPrompt, model: selectedModel });
 
-    if (status === 'succeeded' && currentHash === lastRunHash && resultUrl) {
+    if (status === 'succeeded' && currentHash === lastRunHash && outputImage) {
       console.log("No changes detected, skipping API call.");
       return;
     }
@@ -76,7 +106,7 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
       return;
     }
 
-    if (!finalPrompt) {
+    if (!themePrompt) {
       setError("No prompt detected.");
       setStatus("failed");
       return;
@@ -159,11 +189,11 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
         
         if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
           const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
-          setResultUrl(finalUrl);
+          setOutputImage(finalUrl);
           setStatus("succeeded");
           setNodes(nds => nds.map(n => n.id === id ? { 
             ...n, 
-            data: { ...n.data, resultUrl: finalUrl, lastRunHash: currentHash, localPrompt } 
+            data: { ...n.data, outputImage: finalUrl, lastRunHash: currentHash, localPrompt } 
           } : n));
           return true;
         } else if (res.status === 'failed' || (res.status as string) === 'error') {
@@ -211,9 +241,15 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
           />
         </div>
 
-        <div className="relative flex items-center h-6">
-          <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
-          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Blueprint Image</span>
+        <div className="flex flex-col gap-1">
+          <div className="relative flex items-center h-6">
+            <Handle type="target" position={Position.Left} id="style" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px]" />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Style Input</span>
+          </div>
+          <div className="relative flex items-center h-6">
+            <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Blueprint Image</span>
+          </div>
         </div>
 
         {/* Model Selection UI */}
@@ -252,8 +288,8 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
 
         {/* Image Preview */}
         <div className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative">
-          {resultUrl ? (
-            <img src={resultUrl} className="w-full h-full object-contain" alt="generated tileset" />
+          {outputImage ? (
+            <img src={outputImage} className="w-full h-full object-contain" alt="generated tileset" />
           ) : (
             <>
               {(status === 'queueing' || status === 'polling') ? (
@@ -300,7 +336,7 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
+      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
     </div>
   );
 }

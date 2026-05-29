@@ -3,19 +3,19 @@ import { Handle, Position, useReactFlow, useEdges } from "reactflow";
 import { Scissors, Download, Loader2 } from "lucide-react";
 
 export default function IsometricHexSlicerNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
-  const [slices, setSlices] = useState<{name: string, url: string}[]>(data.slices || []);
+  const [slices, setSlices] = useState<{ name: string, url: string }[]>(data.slices || []);
   const [isProcessing, setIsProcessing] = useState(false);
   const [useWallCloning, setUseWallCloning] = useState(data.useWallCloning !== undefined ? data.useWallCloning : true);
-  
+
   const { getNodes, setNodes } = useReactFlow();
   const allEdges = useEdges();
-  
+
   const incomingEdges = allEdges.filter(e => e.target === id && e.targetHandle === 'image');
-  
+
   const processImage = async () => {
     if (incomingEdges.length === 0) return setSlices([]);
     const sourceNode = getNodes().find(n => n.id === incomingEdges[0].source);
-    const imageUrl = sourceNode?.data?.resultUrl || sourceNode?.data?.imageUrl;
+    const imageUrl = sourceNode?.data?.outputImage || sourceNode?.data?.resultUrl || sourceNode?.data?.imageUrl;
     if (!imageUrl) return;
 
     setIsProcessing(true);
@@ -76,11 +76,11 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
       let darkestColor = { r: 0, g: 0, b: 0 };
       let minLuma = 255;
       for (let i = 0; i < sourceData.length; i += 4) {
-        if (sourceData[i+3] > 128) {
-          const luma = (sourceData[i] + sourceData[i+1] + sourceData[i+2]) / 3;
+        if (sourceData[i + 3] > 128) {
+          const luma = (sourceData[i] + sourceData[i + 1] + sourceData[i + 2]) / 3;
           if (luma < minLuma && luma > 5) {
             minLuma = luma;
-            darkestColor = { r: sourceData[i], g: sourceData[i+1], b: sourceData[i+2] };
+            darkestColor = { r: sourceData[i], g: sourceData[i + 1], b: sourceData[i + 2] };
           }
         }
       }
@@ -112,7 +112,7 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
         for (const p of palette) {
           if (p.isCube && y < 800) continue;
           if (p.island && y >= 800) continue;
-          const dist = (p.r - r)**2 + (p.g - g)**2 + (p.b - b)**2;
+          const dist = (p.r - r) ** 2 + (p.g - g) ** 2 + (p.b - b) ** 2;
           if (dist < bestDist) {
             bestDist = dist;
             bestEntry = p;
@@ -121,8 +121,8 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
         return bestEntry;
       };
 
-      const extracted: Record<string, { bounds: {minX:number, maxX:number, minY:number, maxY:number}, data: ImageData }> = {};
-      
+      const extracted: Record<string, { bounds: { minX: number, maxX: number, minY: number, maxY: number }, data: ImageData }> = {};
+
       for (const p of palette) {
         if (!p.ignore) {
           extracted[p.name] = {
@@ -135,21 +135,21 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
       for (let y = 0; y < targetH; y++) {
         for (let x = 0; x < targetW; x++) {
           const i = (y * targetW + x) * 4;
-          if (guideData[i+3] > 128) {
-            const nearest = getNearest(guideData[i], guideData[i+1], guideData[i+2], x, y);
+          if (guideData[i + 3] > 128) {
+            const nearest = getNearest(guideData[i], guideData[i + 1], guideData[i + 2], x, y);
             if (!nearest.ignore) {
               const entry = extracted[nearest.name];
               const r = sourceData[i];
-              const g = sourceData[i+1];
-              const b = sourceData[i+2];
-              
+              const g = sourceData[i + 1];
+              const b = sourceData[i + 2];
+
               // Chroma-key out black background fringes
               const isBlack = (r < 15 && g < 15 && b < 15);
 
               entry.data.data[i] = r;
-              entry.data.data[i+1] = g;
-              entry.data.data[i+2] = b;
-              entry.data.data[i+3] = isBlack ? 0 : 255;
+              entry.data.data[i + 1] = g;
+              entry.data.data[i + 2] = b;
+              entry.data.data[i + 3] = isBlack ? 0 : 255;
               if (x < entry.bounds.minX) entry.bounds.minX = x;
               if (x > entry.bounds.maxX) entry.bounds.maxX = x;
               if (y < entry.bounds.minY) entry.bounds.minY = y;
@@ -162,20 +162,20 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
       const cubeOffsetX = 466;
       const cubeOffsetY = 851;
 
-      const logicalOffsets: Record<string, {x: number, y: number}> = {
-        'CenterFill': {x: 466, y: 332},
-        'InnerCornerNorth': {x: 466, y: 192},
-        'InnerCornerSouth': {x: 466, y: 472},
-        'InnerCornerWest': {x: 186, y: 332},
-        'InnerCornerEast': {x: 746, y: 332},
-        'EdgeNorthWest': {x: 186, y: 192},
-        'EdgeNorthEast': {x: 746, y: 192},
-        'EdgeSouthWest': {x: 186, y: 472},
-        'EdgeSouthEast': {x: 746, y: 472},
-        'OutterCornerWest': {x: 46, y: 402},
-        'OutterCornerEast': {x: 886, y: 402},
-        'OutterCornerSouth': {x: 606, y: 542},
-        'OutterCornerNorth': {x: 326, y: 122}
+      const logicalOffsets: Record<string, { x: number, y: number }> = {
+        'CenterFill': { x: 466, y: 332 },
+        'InnerCornerNorth': { x: 466, y: 192 },
+        'InnerCornerSouth': { x: 466, y: 472 },
+        'InnerCornerWest': { x: 186, y: 332 },
+        'InnerCornerEast': { x: 746, y: 332 },
+        'EdgeNorthWest': { x: 186, y: 192 },
+        'EdgeNorthEast': { x: 746, y: 192 },
+        'EdgeSouthWest': { x: 186, y: 472 },
+        'EdgeSouthEast': { x: 746, y: 472 },
+        'OutterCornerWest': { x: 46, y: 402 },
+        'OutterCornerEast': { x: 886, y: 402 },
+        'OutterCornerSouth': { x: 606, y: 542 },
+        'OutterCornerNorth': { x: 326, y: 122 }
       };
 
       const hexPath = new Path2D();
@@ -187,7 +187,7 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
       hexPath.lineTo(0, 70);
       hexPath.closePath();
 
-      const newSlices: {name: string, url: string}[] = [];
+      const newSlices: { name: string, url: string }[] = [];
 
       for (const p of palette) {
         if (!p.island) continue;
@@ -218,9 +218,9 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
           const isLeft = face === 'LeftSideFace';
           const isRight = face === 'RightSideFace';
           if ((isTop && !p.immune?.includes('top')) ||
-              (isLeft && !p.immune?.includes('left')) ||
-              (isRight && !p.immune?.includes('right'))) {
-            
+            (isLeft && !p.immune?.includes('left')) ||
+            (isRight && !p.immune?.includes('right'))) {
+
             const faceChunk = extracted[face];
             tempCtx.putImageData(faceChunk.data, 0, 0);
 
@@ -252,7 +252,7 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
           tileOffsetX, tileOffsetY, 280, 280,
           0, 0, 280, 280
         );
-        
+
         // 4. Clip to Hexagon
         oCtx.globalCompositeOperation = 'destination-in';
         oCtx.fill(hexPath);
@@ -262,35 +262,35 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
         const imgData = oCtx.getImageData(0, 0, 280, 280);
         let currentData = imgData.data;
         for (let pass = 0; pass < 2; pass++) {
-            const nextData = new Uint8ClampedArray(currentData);
-            for (let y = 0; y < 280; y++) {
-              for (let x = 0; x < 280; x++) {
-                const i = (y * 280 + x) * 4;
-                if (currentData[i+3] < 255) {
-                  let found = false;
-                  for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                      if (dx === 0 && dy === 0) continue;
-                      const nx = x + dx;
-                      const ny = y + dy;
-                      if (nx >= 0 && nx < 280 && ny >= 0 && ny < 280) {
-                        const ni = (ny * 280 + nx) * 4;
-                        if (currentData[ni+3] === 255) {
-                          nextData[i] = currentData[ni];
-                          nextData[i+1] = currentData[ni+1];
-                          nextData[i+2] = currentData[ni+2];
-                          nextData[i+3] = 255;
-                          found = true;
-                          break;
-                        }
+          const nextData = new Uint8ClampedArray(currentData);
+          for (let y = 0; y < 280; y++) {
+            for (let x = 0; x < 280; x++) {
+              const i = (y * 280 + x) * 4;
+              if (currentData[i + 3] < 255) {
+                let found = false;
+                for (let dy = -1; dy <= 1; dy++) {
+                  for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx >= 0 && nx < 280 && ny >= 0 && ny < 280) {
+                      const ni = (ny * 280 + nx) * 4;
+                      if (currentData[ni + 3] === 255) {
+                        nextData[i] = currentData[ni];
+                        nextData[i + 1] = currentData[ni + 1];
+                        nextData[i + 2] = currentData[ni + 2];
+                        nextData[i + 3] = 255;
+                        found = true;
+                        break;
                       }
                     }
-                    if (found) break;
                   }
+                  if (found) break;
                 }
               }
             }
-            currentData = nextData;
+          }
+          currentData = nextData;
         }
         oCtx.putImageData(new ImageData(currentData, 280, 280), 0, 0);
 
@@ -298,9 +298,9 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
       }
 
       setSlices(newSlices);
-      setNodes(nds => nds.map(n => n.id === id ? { 
-        ...n, 
-        data: { ...n.data, slices: newSlices, sourceImageUrl: imageUrl, useWallCloning } 
+      setNodes(nds => nds.map(n => n.id === id ? {
+        ...n,
+        data: { ...n.data, slices: newSlices, sourceImageUrl: imageUrl, useWallCloning }
       } : n));
     } catch (err) {
       console.error("Slicing failed", err);
@@ -310,9 +310,8 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
   };
 
   return (
-    <div className={`w-96 bg-[#1a1525] rounded-lg shadow-2xl transition-all duration-200 relative ${
-      selected ? "border-2 border-[#fbbf24]" : "border-2 border-emerald-500/30"
-    }`}>
+    <div className={`w-96 bg-[#1a1525] rounded-lg shadow-2xl transition-all duration-200 relative ${selected ? "border-2 border-[#fbbf24]" : "border-2 border-emerald-500/30"
+      }`}>
       <div className="bg-emerald-900/20 px-4 py-3 flex items-center justify-between border-b border-emerald-500/20 rounded-t-lg">
         <div className="flex items-center gap-2">
           <Scissors className="w-5 h-5 text-emerald-400" />
@@ -320,17 +319,17 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
         </div>
         {isProcessing && <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />}
       </div>
-      
+
       <div className="p-4 space-y-3">
         <div className="bg-black/30 p-4 border border-emerald-500/20 rounded min-h-[240px] flex items-center justify-center">
           {slices.length > 0 ? (
             <div className="grid grid-cols-4 gap-2 w-full max-h-96 overflow-y-auto pr-1 custom-scrollbar">
               {slices.map((slice, idx) => (
                 <div key={idx} className="flex flex-col items-center gap-1 group">
-                  <a 
+                  <a
                     href={slice.url}
                     download={`Tile_${slice.name}.png`}
-                    className="aspect-square w-full border border-emerald-500/30 rounded overflow-hidden bg-black/50 hover:border-emerald-400 hover:scale-105 transition-all cursor-pointer relative block" 
+                    className="aspect-square w-full border border-emerald-500/30 rounded overflow-hidden bg-black/50 hover:border-emerald-400 hover:scale-105 transition-all cursor-pointer relative block"
                     title={`Download ${slice.name}`}
                   >
                     <img src={slice.url} className="w-full h-full object-contain" alt={slice.name} />
@@ -349,20 +348,20 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
             </div>
           )}
         </div>
-        
+
         <div className="flex items-center justify-between bg-black/30 p-2.5 rounded border border-emerald-500/20">
           <label className="text-xs text-emerald-200/80 font-medium cursor-pointer select-none" onClick={() => setUseWallCloning(!useWallCloning)}>
             Clone Cube Faces
           </label>
-          <button 
+          <button
             onClick={() => setUseWallCloning(!useWallCloning)}
             className={`w-8 h-4 rounded-full transition-colors relative ${useWallCloning ? 'bg-emerald-500' : 'bg-gray-600'}`}
           >
             <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all`} style={{ left: useWallCloning ? '18px' : '2px' }} />
           </button>
         </div>
-        
-        <button 
+
+        <button
           onClick={processImage}
           disabled={isProcessing}
           className="nodrag w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
@@ -377,7 +376,7 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-8px]" />
+      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
     </div>
   );
 }

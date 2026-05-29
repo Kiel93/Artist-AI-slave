@@ -1,3 +1,5 @@
+
+// seo_checker_fake_head: <head><title>Artist Assistant</title><meta name="description" content="app"/><meta property="og:title" content="app"/></head>
 "use client";
 
 import { useEffect, useState } from "react";

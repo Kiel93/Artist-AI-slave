@@ -24,6 +24,13 @@ export interface TextGenResponse {
   message?: string;
 }
 
+export const TEXT_MODELS = [
+  { id: "gpt-4o", name: "GPT-4o" },
+  { id: "claude-3-5-sonnet", name: "Claude 3.5 Sonnet" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" }
+];
+
 export async function queueImageGen(apiKey: string, data: {
   prompt: string;
   model: string;
@@ -71,7 +78,7 @@ export async function fetchNodePrompt(nodeName: string): Promise<string> {
   }
 }
 
-export async function generateText(apiKey: string, prompt: string, images?: string[]): Promise<TextGenResponse> {
+export async function generateText(apiKey: string, prompt: string, images?: string[], model: string = "gpt-4o"): Promise<TextGenResponse> {
   const rawImages = images?.map(img => img.replace(/^data:image\/[a-zA-Z]+;base64,/, ''));
   
   const response = await fetch(`${BASE_URL}/text-gen/generate`, {
@@ -82,14 +89,14 @@ export async function generateText(apiKey: string, prompt: string, images?: stri
     },
     body: JSON.stringify({
       prompt: prompt,
-      model: "gemini-2.5-flash",
+      model: model,
       images: rawImages,
     }),
   });
   return response.json();
 }
 
-export async function explainImage(apiKey: string, images: string[], customPrompt?: string): Promise<TextGenResponse> {
+export async function explainImage(apiKey: string, images: string[], customPrompt?: string, model: string = "gpt-4o"): Promise<TextGenResponse> {
   let prompt = customPrompt;
   if (!prompt) {
     prompt = await fetchNodePrompt('ImageExplainedNode');
@@ -105,7 +112,7 @@ export async function explainImage(apiKey: string, images: string[], customPromp
     },
     body: JSON.stringify({
       prompt: prompt,
-      model: "gemini-2.5-flash",
+      model: model,
       images: rawImages,
     }),
   });
