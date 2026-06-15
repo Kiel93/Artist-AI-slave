@@ -423,7 +423,7 @@ export default function AssetManager({
                     
                     if (importType === 'ground' || importType === 'ocean') {
                       const validNodes = importType === 'ground'
-                        ? task.nodes.filter(n => n.type === 'isometricHexSlicer')
+                        ? task.nodes.filter(n => n.type === 'isometricHexSlicer' && n.data?.slices?.some((s: any) => s.name === 'Ground_CenterFill' || s.name === 'CenterFill'))
                         : task.nodes.filter(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
                         
                       if (validNodes.length === 0) return null;
@@ -435,7 +435,13 @@ export default function AssetManager({
                           <div className="text-xs text-gray-400 mb-2 px-1">{task.name}</div>
                           <div className="grid grid-cols-4 gap-2">
                             {validNodes.map(node => {
-                               const imageUrl = node.data.outputImage || node.data.resultUrl || node.data.imageUrl;
+                               let imageUrl = node.data.outputImage || node.data.resultUrl || node.data.imageUrl;
+                               if (importType === 'ground' && node.data.slices) {
+                                 const centerFillSlice = node.data.slices.find((s: any) => s.name === 'Ground_CenterFill' || s.name === 'CenterFill');
+                                 if (centerFillSlice) {
+                                   imageUrl = centerFillSlice.url;
+                                 }
+                               }
                                return (
                                 <button
                                   key={node.id}

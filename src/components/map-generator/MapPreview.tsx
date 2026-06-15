@@ -30,6 +30,74 @@ interface MapPreviewProps {
   mapDataRef?: React.MutableRefObject<{ gridLevels: any, objectInstances: any[] }>;
 }
 
+type Neighborhood = {
+  n: number; e: number; s: number; w: number;
+  ne: number; se: number; sw: number; nw: number;
+  distN: number; distE: number; distS: number; distW: number;
+  distNE: number; distSE: number; distSW: number; distNW: number;
+};
+
+const getNeighbors = (
+  col: number, row: number, 
+  canvasWidth: number, canvasHeight: number, 
+  getDist: (cx: number, cy: number) => number, 
+  isCurrent: (d: number | undefined) => number,
+  fallbackDist: number
+): Neighborhood => {
+  const distN = col < canvasWidth - 1 ? getDist(col + 1, row) : fallbackDist;
+  const distE = row > 0 ? getDist(col, row - 1) : fallbackDist;
+  const distS = col > 0 ? getDist(col - 1, row) : fallbackDist;
+  const distW = row < canvasHeight - 1 ? getDist(col, row + 1) : fallbackDist;
+
+  const n = isCurrent(distN);
+  const e = isCurrent(distE);
+  const s = isCurrent(distS);
+  const w = isCurrent(distW);
+
+  const distNE = row > 0 && col < canvasWidth - 1 ? getDist(col + 1, row - 1) : fallbackDist;
+  const distSE = row > 0 && col > 0 ? getDist(col - 1, row - 1) : fallbackDist;
+  const distSW = row < canvasHeight - 1 && col > 0 ? getDist(col - 1, row + 1) : fallbackDist;
+  const distNW = row < canvasHeight - 1 && col < canvasWidth - 1 ? getDist(col + 1, row + 1) : fallbackDist;
+
+  const ne = isCurrent(distNE);
+  const se = isCurrent(distSE);
+  const sw = isCurrent(distSW);
+  const nw = isCurrent(distNW);
+
+  return { n, e, s, w, ne, se, sw, nw, distN, distE, distS, distW, distNE, distSE, distSW, distNW };
+};
+
+const formatTerrainTileId = (tileIdResult: string): string => {
+  if (tileIdResult === 'CenterFill') return 'Center';
+  if (tileIdResult.startsWith('InnerCorner')) return 'InnerCorner_' + tileIdResult.substring(11);
+  if (tileIdResult.startsWith('Edge')) return 'Edge_' + tileIdResult.substring(4);
+  if (tileIdResult.startsWith('OutterCorner')) return 'OutterCorner_' + tileIdResult.substring(12);
+  return tileIdResult;
+};
+
+const getFoamMaskToDraw = (nb: Neighborhood): string | null => {
+  // Hardcoded inner/outer corner overrides
+  if (nb.distN === 0 && nb.distW === 0 && nb.distE > 0 && nb.distS > 0) return 'Tile_InnerCorner_South';
+  if (nb.distN === 0 && nb.distE === 0 && nb.distW > 0 && nb.distS > 0) return 'Tile_InnerCorner_West';
+  if (nb.distS === 0 && nb.distW === 0 && nb.distE > 0 && nb.distN > 0) return 'Tile_InnerCorner_East';
+  if (nb.distS === 0 && nb.distE === 0 && nb.distW > 0 && nb.distN > 0) return 'Tile_InnerCorner_North';
+  if (nb.distNW === 0 && nb.distN === 1 && nb.distS > 1) return 'Tile_OutterCorner_South';
+  if (nb.distNE === 0 && nb.distN === 1 && nb.distS > 1) return 'Tile_OutterCorner_West';
+  if (nb.distSW === 0 && nb.distS === 1 && nb.distN > 1) return 'Tile_OutterCorner_East';
+  if (nb.distSE === 0 && nb.distS === 1 && nb.distN > 1) return 'Tile_OutterCorner_North';
+  
+  if (nb.n === 0 && nb.e === 0 && nb.s === 0 && nb.w === 0) return 'Tile_Center';
+  
+  if (nb.n === 1 && nb.e === 1 && nb.s === 1 && nb.w === 1) {
+    const tileIdResult = TerrainGenerator.getTileId(nb.n, nb.e, nb.s, nb.w, nb.ne, nb.se, nb.sw, nb.nw);
+    if (tileIdResult) return `Tile_${formatTerrainTileId(tileIdResult)}`;
+  } else {
+    const tileIdResult = TerrainGenerator.getTileId(nb.n, nb.e, nb.s, nb.w, 1, 1, 1, 1);
+    if (tileIdResult) return `Tile_${formatTerrainTileId(tileIdResult)}`;
+  }
+  return null;
+};
+
 // <label>
 export default function MapPreview({
   groundAsset,
@@ -398,14 +466,24 @@ export default function MapPreview({
     setIsRendering(true);
     const loadedImages: Record<string, HTMLImageElement> = {};
 
+    // ============================================================================
+    // ⚠️ DO NOT MODIFY - PROTECTED OCEAN TILING CODE
+    // The tile arrays below are exactly synced to the output strings of the Unity
+    // Isometric Tilemap logic inside TerrainGenerator.ts. DO NOT change these names
+    // or attempt to decouple them. The physical PNG assets must match this standard.
+    // ============================================================================
     const oceanTileNames = [
       'Tile_Center',
       'Tile_Edge_NorthEast', 'Tile_Edge_NorthWest', 'Tile_Edge_SouthEast', 'Tile_Edge_SouthWest',
       'Tile_InnerCorner_East', 'Tile_InnerCorner_North', 'Tile_InnerCorner_South', 'Tile_InnerCorner_West',
-      'Tile_OutterCorner_East', 'Tile_OutterCorner_North', 'Tile_OutterCorner_South', 'Tile_OutterCorner_West',
-      'Tile_LowerDepth'
+      'Tile_OutterCorner_East', 'Tile_OutterCorner_North', 'Tile_OutterCorner_South', 'Tile_OutterCorner_West'
     ];
-    const foamTileNames = oceanTileNames.filter(name => name !== 'Tile_LowerDepth');
+    const foamTileNames = [
+      'Tile_Center',
+      'Tile_Edge_NorthEast', 'Tile_Edge_NorthWest', 'Tile_Edge_SouthEast', 'Tile_Edge_SouthWest',
+      'Tile_InnerCorner_East', 'Tile_InnerCorner_North', 'Tile_InnerCorner_South', 'Tile_InnerCorner_West',
+      'Tile_OutterCorner_East', 'Tile_OutterCorner_North', 'Tile_OutterCorner_South', 'Tile_OutterCorner_West'
+    ];
 
     const slicesCount = groundAsset.slices.length;
     let variationsCount = 0;
@@ -766,6 +844,10 @@ export default function MapPreview({
               continue; // Cull this tile and its objects
             }
 
+            // ⚠️ DO NOT MODIFY - PROTECTED ISOMETRIC TILING LOGIC
+            // The depth calculation ensures perfect back-to-front rendering (Painter's Algorithm).
+            // Layer serves as primary sort. -(row + col) serves as secondary spatial sort,
+            // mapping perfectly to top-to-bottom screen rendering (matching Unity's Transparency Sort Axis).
             cellsToRender.push({
               ...gridLvl[row][col],
               col, row,
@@ -853,65 +935,56 @@ export default function MapPreview({
         for (let lvl = 1; lvl <= maxLvl + 1; lvl++) {
           if ((cell.distance || 0) >= lvl) {
             let maskToDraw: string | null = null;
-            if ((cell.distance || 0) > lvl || lvl > maxLvl) {
-              maskToDraw = 'Tile_LowerDepth';
+            let isUniformDarken = false;
+
+            if ((cell.distance || 0) > lvl) {
+              isUniformDarken = true;
+              cell.taperTile = `Lvl${lvl}_Tile_Center`;
+              if (gridLevels[0]?.[cell.row]?.[cell.col]) {
+                gridLevels[0][cell.row][cell.col].taperTile = cell.taperTile;
+              }
+            } else if (lvl > maxLvl) {
+              maskToDraw = 'Tile_Center';
             } else {
               const isCurrent = (d: number | undefined) => (d !== undefined && d <= lvl) ? 1 : 0;
               const getDist = (cx: number, cy: number) => {
-                if (cx < 0 || cx >= parameters.canvasWidth || cy < 0 || cy >= parameters.canvasHeight) return cell.distance || 0;
+                if (cx < 0 || cx >= parameters.canvasWidth || cy < 0 || cy >= parameters.canvasHeight) return 999;
                 return gridLevels[0]?.[cy]?.[cx]?.distance || 0;
               };
 
-              const distN = cell.col < parameters.canvasWidth - 1 ? getDist(cell.col + 1, cell.row) : (cell.distance || 0);
-              const distE = cell.row > 0 ? getDist(cell.col, cell.row - 1) : (cell.distance || 0);
-              const distS = cell.col > 0 ? getDist(cell.col - 1, cell.row) : (cell.distance || 0);
-              const distW = cell.row < parameters.canvasHeight - 1 ? getDist(cell.col, cell.row + 1) : (cell.distance || 0);
+              const nb = getNeighbors(cell.col, cell.row, parameters.canvasWidth, parameters.canvasHeight, getDist, isCurrent, 999);
 
-              const n = isCurrent(distN);
-              const e = isCurrent(distE);
-              const s = isCurrent(distS);
-              const w = isCurrent(distW);
-
-              const distNE = cell.row > 0 && cell.col < parameters.canvasWidth - 1 ? getDist(cell.col + 1, cell.row - 1) : (cell.distance || 0);
-              const distSE = cell.row > 0 && cell.col > 0 ? getDist(cell.col - 1, cell.row - 1) : (cell.distance || 0);
-              const distSW = cell.row < parameters.canvasHeight - 1 && cell.col > 0 ? getDist(cell.col - 1, cell.row + 1) : (cell.distance || 0);
-              const distNW = cell.row < parameters.canvasHeight - 1 && cell.col < parameters.canvasWidth - 1 ? getDist(cell.col + 1, cell.row + 1) : (cell.distance || 0);
-
-              if (n === 0 && e === 0 && s === 0 && w === 0) {
-                maskToDraw = 'Tile_LowerDepth';
-              } else if (n === 1 && e === 1 && s === 1 && w === 1) {
-                const ne = isCurrent(distNE);
-                const nw = isCurrent(distNW);
-                const se = isCurrent(distSE);
-                const sw = isCurrent(distSW);
-
-                const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, ne, se, sw, nw);
-                if (tileIdResult) {
-                  let formattedName = tileIdResult;
-                  if (tileIdResult === 'CenterFill') formattedName = 'Center';
-                  else if (tileIdResult.startsWith('InnerCorner')) formattedName = 'InnerCorner_' + tileIdResult.substring(11);
-                  maskToDraw = `Tile_${formattedName}`;
-                }
+              if (nb.n === 0 && nb.e === 0 && nb.s === 0 && nb.w === 0) {
+                maskToDraw = 'Tile_Center';
+              } else if (nb.n === 1 && nb.e === 1 && nb.s === 1 && nb.w === 1) {
+                const tileIdResult = TerrainGenerator.getTileId(nb.n, nb.e, nb.s, nb.w, nb.ne, nb.se, nb.sw, nb.nw);
+                // ⚠️ DO NOT MODIFY - PROTECTED OCEAN TILING CODE
+                if (tileIdResult) maskToDraw = `Tile_${formatTerrainTileId(tileIdResult)}`;
               } else {
-                const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, 1, 1, 1, 1);
-                if (tileIdResult) {
-                  let formattedName = tileIdResult;
-                  if (tileIdResult.startsWith('Edge')) formattedName = 'Edge_' + tileIdResult.substring(4);
-                  else if (tileIdResult.startsWith('OutterCorner')) formattedName = 'OutterCorner_' + tileIdResult.substring(12);
-                  maskToDraw = `Tile_${formattedName}`;
-                }
-              }
-
-              if (maskToDraw) {
-                cell.taperTile = `Lvl${lvl}_${maskToDraw}`;
-                if (gridLevels[0]?.[cell.row]?.[cell.col]) {
-                  gridLevels[0][cell.row][cell.col].taperTile = cell.taperTile;
-                }
+                const tileIdResult = TerrainGenerator.getTileId(nb.n, nb.e, nb.s, nb.w, 1, 1, 1, 1);
+                // ⚠️ DO NOT MODIFY - PROTECTED OCEAN TILING CODE
+                if (tileIdResult) maskToDraw = `Tile_${formatTerrainTileId(tileIdResult)}`;
               }
             }
 
-            if (maskToDraw) {
-              if (parameters.oceanTaperLevels > 0 && lvl <= maxLvl) {
+            if (isUniformDarken) {
+              ctx.save();
+              ctx.fillStyle = `rgba(0,0,0,${parameters.oceanDimAmount / parameters.oceanTaperLevels})`;
+              ctx.translate(cell.isoX, cell.isoY + (tileHalfHeight * 2));
+              ctx.beginPath();
+              ctx.moveTo(0, -tileHalfHeight);
+              ctx.lineTo(tileHalfWidth, 0);
+              ctx.lineTo(0, tileHalfHeight);
+              ctx.lineTo(-tileHalfWidth, 0);
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            } else if (maskToDraw) {
+              cell.taperTile = `Lvl${lvl}_${maskToDraw}`;
+              if (gridLevels[0]?.[cell.row]?.[cell.col]) {
+                gridLevels[0][cell.row][cell.col].taperTile = cell.taperTile;
+              }
+              if (parameters.oceanTaperLevels > 0) {
                 const maskImg = images[`mask_${maskToDraw}`];
                 if (maskImg) {
                   ctx.save();
@@ -935,54 +1008,10 @@ export default function MapPreview({
         };
 
         const isCurrent = (d: number | undefined) => (d !== undefined && d <= 1) ? 1 : 0;
-        const distN = cell.col < parameters.canvasWidth - 1 ? getRawDist(cell.col + 1, cell.row) : (cell as any).rawDistance;
-        const distE = cell.row > 0 ? getRawDist(cell.col, cell.row - 1) : (cell as any).rawDistance;
-        const distS = cell.col > 0 ? getRawDist(cell.col - 1, cell.row) : (cell as any).rawDistance;
-        const distW = cell.row < parameters.canvasHeight - 1 ? getRawDist(cell.col, cell.row + 1) : (cell as any).rawDistance;
+        const nb = getNeighbors(cell.col, cell.row, parameters.canvasWidth, parameters.canvasHeight, getRawDist, isCurrent, (cell as any).rawDistance || 0);
+        foamMaskToDraw = getFoamMaskToDraw(nb);
 
-        const n = isCurrent(distN);
-        const e = isCurrent(distE);
-        const s = isCurrent(distS);
-        const w = isCurrent(distW);
-
-        const distNE = cell.row > 0 && cell.col < parameters.canvasWidth - 1 ? getRawDist(cell.col + 1, cell.row - 1) : (cell as any).rawDistance;
-        const distSE = cell.row > 0 && cell.col > 0 ? getRawDist(cell.col - 1, cell.row - 1) : (cell as any).rawDistance;
-        const distSW = cell.row < parameters.canvasHeight - 1 && cell.col > 0 ? getRawDist(cell.col - 1, cell.row + 1) : (cell as any).rawDistance;
-        const distNW = cell.row < parameters.canvasHeight - 1 && cell.col < parameters.canvasWidth - 1 ? getRawDist(cell.col + 1, cell.row + 1) : (cell as any).rawDistance;
-
-        if (distN === 0 && distW === 0 && distE > 0 && distS > 0) foamMaskToDraw = 'Tile_InnerCorner_South';
-        else if (distN === 0 && distE === 0 && distW > 0 && distS > 0) foamMaskToDraw = 'Tile_InnerCorner_West';
-        else if (distS === 0 && distW === 0 && distE > 0 && distN > 0) foamMaskToDraw = 'Tile_InnerCorner_East';
-        else if (distS === 0 && distE === 0 && distW > 0 && distN > 0) foamMaskToDraw = 'Tile_InnerCorner_North';
-        else if (distNW === 0 && distN === 1 && distS > 1) foamMaskToDraw = 'Tile_OutterCorner_South';
-        else if (distNE === 0 && distN === 1 && distS > 1) foamMaskToDraw = 'Tile_OutterCorner_West';
-        else if (distSW === 0 && distS === 1 && distN > 1) foamMaskToDraw = 'Tile_OutterCorner_East';
-        else if (distSE === 0 && distS === 1 && distN > 1) foamMaskToDraw = 'Tile_OutterCorner_North';
-        else if (n === 0 && e === 0 && s === 0 && w === 0) {
-          foamMaskToDraw = 'Tile_Center';
-        } else if (n === 1 && e === 1 && s === 1 && w === 1) {
-          const ne = isCurrent(distNE);
-          const nw = isCurrent(distNW);
-          const se = isCurrent(distSE);
-          const sw = isCurrent(distSW);
-          const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, ne, se, sw, nw);
-          if (tileIdResult) {
-            let formattedName = tileIdResult;
-            if (tileIdResult === 'CenterFill') formattedName = 'Center';
-            else if (tileIdResult.startsWith('InnerCorner')) formattedName = 'InnerCorner_' + tileIdResult.substring(11);
-            foamMaskToDraw = `Tile_${formattedName}`;
-          }
-        } else {
-          const tileIdResult = TerrainGenerator.getTileId(n, e, s, w, 1, 1, 1, 1);
-          if (tileIdResult) {
-            let formattedName = tileIdResult;
-            if (tileIdResult.startsWith('Edge')) formattedName = 'Edge_' + tileIdResult.substring(4);
-            else if (tileIdResult.startsWith('OutterCorner')) formattedName = 'OutterCorner_' + tileIdResult.substring(12);
-            foamMaskToDraw = `Tile_${formattedName}`;
-          }
-        }
-
-        if (foamMaskToDraw && foamMaskToDraw !== 'Tile_LowerDepth') {
+        if (foamMaskToDraw && foamMaskToDraw !== 'Tile_Center') {
           cell.foamTile = foamMaskToDraw;
           if (gridLevels[0]?.[cell.row]?.[cell.col]) {
             gridLevels[0][cell.row][cell.col].foamTile = foamMaskToDraw;
@@ -999,9 +1028,9 @@ export default function MapPreview({
 
       // [FOAM LAYER 2: INNER GAP FILLER]
       if (cell.layer === 0 && parameters.oceanAddFoam && cell.distance === 0) {
-        cell.foamTile = 'Tile_LowerDepth';
+        cell.foamTile = 'Tile_Center';
         if (gridLevels[0]?.[cell.row]?.[cell.col]) {
-          gridLevels[0][cell.row][cell.col].foamTile = 'Tile_LowerDepth';
+          gridLevels[0][cell.row][cell.col].foamTile = 'Tile_Center';
         }
         const foamImg = images['foam_Tile_Center'];
         if (foamImg) {
@@ -1839,3 +1868,4 @@ export default function MapPreview({
     </div>
   );
 }
+

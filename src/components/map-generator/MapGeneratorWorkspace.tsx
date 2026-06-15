@@ -61,6 +61,7 @@ export interface MapParameters {
   oceanAddFoam?: boolean;
   oceanFoamColor?: { h: number, s: number, l: number };
   oceanTaperWidths?: Record<number, number>;
+  islandName?: string;
 }
 
 export interface DecalAsset {
@@ -95,7 +96,13 @@ export interface MapState {
 export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
   const { state: mapState, set: setMapState, undo, redo, canUndo, canRedo } = useHistory<MapState>({
     groundAsset: null,
-    oceanAsset: null,
+    oceanAsset: {
+      taskId: 'default',
+      taskName: 'Default Ocean',
+      type: 'ocean',
+      nodeId: 'default',
+      slices: [{ name: 'Flat_Floor', url: '/assets/OceanTaper_v2/OceanTile.png' }]
+    },
     objectAssets: [],
     decalAssets: [],
     parameters: {
@@ -164,12 +171,19 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
             islandWidth: Math.floor(p.width / 2),
             islandHeight: Math.floor(p.height / 2),
             seed: p.seed,
-            noiseScale: p.noiseScale
+            noiseScale: p.noiseScale,
+            islandName: 'Island_1'
           };
         }
         setMapState({
           groundAsset: task.mapData.groundAsset || null,
-          oceanAsset: task.mapData.oceanAsset || null,
+          oceanAsset: task.mapData.oceanAsset || {
+            taskId: 'default',
+            taskName: 'Default Ocean',
+            type: 'ocean',
+            nodeId: 'default',
+            slices: [{ name: 'Flat_Floor', url: '/assets/OceanTaper_v2/OceanTile.png' }]
+          },
           objectAssets: task.mapData.objectAssets || [],
           parameters: p,
           instanceOverrides: task.mapData.instanceOverrides || {},

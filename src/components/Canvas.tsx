@@ -13,6 +13,7 @@ import ReactFlow, {
   Edge,
   Node,
   Panel,
+  SelectionMode,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Trash2 } from "lucide-react";
@@ -95,6 +96,8 @@ export default function Canvas({ taskId }: CanvasProps) {
   const [future, setFuture] = useState<{nodes: Node[], edges: Edge[]}[]>([]);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
+  const copiedNodesRef = useRef<Node[]>([]);
+  const copiedEdgesRef = useRef<Edge[]>([]);
 
   useEffect(() => {
     nodesRef.current = nodes;
@@ -141,11 +144,66 @@ export default function Canvas({ taskId }: CanvasProps) {
       } else if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         handleUndo();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+        const selectedNodes = nodesRef.current.filter(n => n.selected);
+        if (selectedNodes.length > 0) {
+          copiedNodesRef.current = selectedNodes;
+          const selectedNodeIds = new Set(selectedNodes.map(n => n.id));
+          copiedEdgesRef.current = edgesRef.current.filter(edge => 
+            selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
+          );
+        }
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'v') {
+        if (copiedNodesRef.current && copiedNodesRef.current.length > 0) {
+          saveHistory();
+          const idMapping = new Map<string, string>();
+          const newNodes = copiedNodesRef.current.map(n => {
+            const newId = getId();
+            idMapping.set(n.id, newId);
+            const newData = JSON.parse(JSON.stringify(n.data));
+            return {
+              ...n,
+              id: newId,
+              position: { x: n.position.x + 50, y: n.position.y + 50 },
+              selected: true,
+              data: newData,
+            };
+          });
+          
+          let finalizedNewNodes = newNodes.map(n => {
+            if (n.parentId) {
+              if (idMapping.has(n.parentId)) {
+                return { ...n, parentId: idMapping.get(n.parentId) };
+              } else {
+                const { parentId, ...rest } = n;
+                return rest;
+              }
+            }
+            return n;
+          });
+
+          const newEdges = copiedEdgesRef.current.map(edge => ({
+            ...edge,
+            id: `e-${getId()}`,
+            source: idMapping.get(edge.source) || edge.source,
+            target: idMapping.get(edge.target) || edge.target,
+            selected: true,
+          }));
+
+          setNodes((nds) => {
+            const unselected = nds.map(node => ({ ...node, selected: false }));
+            return [...unselected, ...finalizedNewNodes];
+          });
+          setEdges((eds) => {
+            const unselected = eds.map(edge => ({ ...edge, selected: false }));
+            return [...unselected, ...newEdges];
+          });
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, setNodes, setEdges, saveHistory]);
 
   useEffect(() => {
     getTask(taskId).then(task => {
@@ -153,11 +211,22 @@ export default function Canvas({ taskId }: CanvasProps) {
         setTaskName(task.name);
         if (task.nodes && task.nodes.length > 0) {
           // Migration: Rename 'idea' to 'prompt', 'plenxAiOutput' to 'generalImageGeneration'
-          const migratedNodes = task.nodes.map(n => {
+          let migratedNodes = task.nodes.map(n => {
             if (n.type === 'idea') return { ...n, type: 'prompt' };
             if (n.type === 'plenxAiOutput') return { ...n, type: 'generalImageGeneration' };
             return n;
           });
+          
+          // Cleanup: Remove parentId if parent node doesn't exist
+          const validNodeIds = new Set(migratedNodes.map(n => n.id));
+          migratedNodes = migratedNodes.map(n => {
+            if (n.parentId && !validNodeIds.has(n.parentId)) {
+              const { parentId, ...rest } = n;
+              return rest;
+            }
+            return n;
+          });
+
           setNodes(migratedNodes);
           setEdges(task.edges || []);
           
@@ -395,6 +464,10 @@ export default function Canvas({ taskId }: CanvasProps) {
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
           deleteKeyCode={['Backspace', 'Delete']}
+          panOnDrag={[1, 2]}
+          selectionOnDrag={true}
+          selectionMode={SelectionMode.Partial}
+          minZoom={0.1}
           fitView
           className="bg-[var(--color-blender-bg)]"
         >
