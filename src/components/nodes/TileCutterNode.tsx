@@ -184,13 +184,18 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
         </button>
       </div>
 
-      <div className="relative flex items-center h-6 mt-2 pl-4">
-        <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none" />
-        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Image Input</span>
+      <div className="p-4 pb-0">
+        {/* Top Panel: Inputs */}
+        <div className="flex flex-col gap-1">
+          <div className="relative flex items-center h-6">
+            <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Image Input</span>
+          </div>
+        </div>
       </div>
 
       {isExpanded && (
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 pt-2">
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-xs text-emerald-200/80 mb-1">
@@ -269,7 +274,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none" />
+      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
     </div>
   );
 }

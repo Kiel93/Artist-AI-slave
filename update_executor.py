@@ -1,4 +1,7 @@
-import { fetchNodePrompt } from "@/lib/plenxai";
+import os
+
+def build_executor():
+    content = """import { fetchNodePrompt } from "@/lib/plenxai";
 import { generateTextUniversal, explainImageUniversal } from "@/lib/llm-router";
 import { queueImageGen, getTaskStatus, uploadMediaDirect } from "@/lib/plenxai";
 import { removeBackground as imglyRemoveBackground } from "@imgly/background-removal";
@@ -148,7 +151,7 @@ export const executeGeminiRefinerNode = async (nodeData: any, inputs: NodeExecut
   const model = nodeData.model || "gemini-2.5-flash";
   try {
     let systemPrompt = await fetchNodePrompt('GeminiRefinerNode');
-    if (!systemPrompt) systemPrompt = `You are a prompt engineer. Refine the user's raw idea into a high-quality, detailed prompt for AI image generation. Output ONLY the refined prompt text.\n\nUser Input:\n{prompt}`;
+    if (!systemPrompt) systemPrompt = `You are a prompt engineer. Refine the user's raw idea into a high-quality, detailed prompt for AI image generation. Output ONLY the refined prompt text.\\n\\nUser Input:\\n{prompt}`;
     const finalPrompt = systemPrompt.replace('{prompt}', rawPrompt);
     const imageRefs = inputs.imageInputs.length > 0 ? inputs.imageInputs : undefined;
     const response = await generateTextUniversal(finalPrompt, imageRefs, model);
@@ -201,12 +204,12 @@ export const executeGeneralImageGenerationNode = async (nodeData: any, inputs: N
       const interval = setInterval(async () => {
         try {
           const res = await getTaskStatus(apiKey, taskId);
-          const isDone = res.status === 'succeeded' || (res.status as string) === 'completed' || (res.status as string) === 'success' || !!res.result_url;
+          const isDone = res.status === 'succeeded' || res.status === 'completed' || res.status === 'success' || !!res.result_url;
           if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
             clearInterval(interval);
             const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
             resolve({ success: true, data: { outputImage: finalUrl } });
-          } else if (res.status === 'failed' || (res.status as string) === 'error') {
+          } else if (res.status === 'failed' || res.status === 'error') {
             clearInterval(interval);
             resolve({ success: false, error: (res as any).error || (res as any).message || "Generation failed on server." });
           }
@@ -374,7 +377,7 @@ export const executeAssetGeneratorNode = async (nodeData: any, inputs: NodeExecu
   const styleString = styleInput ? ` Artstyle: ${styleInput}` : "";
   let baseApiPrompt = await fetchNodePrompt('AssetGeneratorNode');
   if (!baseApiPrompt) {
-    baseApiPrompt = `You are an artist in the game industry. Generate {object} that would visually match and perfectly sit in the middle of this island. Isolate the {object} and make the background neon green for color keying (#00FF00). IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE COMPONENTS FROM REFERENCE IN THE GENERATED IMAGE. USE THe IMAGE 2 AS REFERENCE FOR THE {object}.\nSubject: A single isolated {object} rendered in a strict 30-degree isometric perspective.\nStyle: {style}\nComposition: The {object} must be centered, filling 70% of the canvas. DO NOT include the island base or any terrain from the reference image. Generate the {object} as a standalone floating sprite.\nTechnical Output: Place the object on a solid, flat neon green background (#00FF00). IMPORTANT: Ensure there are no ground shadows, no floor planes, and no "color spill" or neon green glow reflected onto the object. The edges must be sharp and clean for pixel extraction.\nReference: {reference image}.\nSpec: resolution:{resolution}. ratio 1:1.`;
+    baseApiPrompt = `You are an artist in the game industry. Generate {object} that would visually match and perfectly sit in the middle of this island. Isolate the {object} and make the background neon green for color keying (#00FF00). IMPORTANT: PRESERVE THE ARTSTYLE AND LIGHTING, DO NOT INCLUDE COMPONENTS FROM REFERENCE IN THE GENERATED IMAGE. USE THe IMAGE 2 AS REFERENCE FOR THE {object}.\\nSubject: A single isolated {object} rendered in a strict 30-degree isometric perspective.\\nStyle: {style}\\nComposition: The {object} must be centered, filling 70% of the canvas. DO NOT include the island base or any terrain from the reference image. Generate the {object} as a standalone floating sprite.\\nTechnical Output: Place the object on a solid, flat neon green background (#00FF00). IMPORTANT: Ensure there are no ground shadows, no floor planes, and no "color spill" or neon green glow reflected onto the object. The edges must be sharp and clean for pixel extraction.\\nReference: {reference image}.\\nSpec: resolution:{resolution}. ratio 1:1.`;
   }
 
   const selectedResolution = nodeData.resolution || "1k";
@@ -401,7 +404,7 @@ export const executeAssetGeneratorNode = async (nodeData: any, inputs: NodeExecu
       const interval = setInterval(async () => {
         try {
           const res = await getTaskStatus(apiKey, response.task_id!);
-          const isDone = res.status === 'succeeded' || (res.status as string) === 'completed' || (res.status as string) === 'success' || !!res.result_url;
+          const isDone = res.status === 'succeeded' || res.status === 'completed' || res.status === 'success' || !!res.result_url;
           if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
             clearInterval(interval);
             const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
@@ -411,7 +414,7 @@ export const executeAssetGeneratorNode = async (nodeData: any, inputs: NodeExecu
             } catch (err: any) {
               resolve({ success: false, error: err.message || "Chroma key failed." });
             }
-          } else if (res.status === 'failed' || (res.status as string) === 'error') {
+          } else if (res.status === 'failed' || res.status === 'error') {
             clearInterval(interval);
             resolve({ success: false, error: "Generation failed." });
           }
@@ -440,7 +443,7 @@ export const executeTilesetGeneratorNode = async (nodeData: any, inputs: NodeExe
 
   let baseApiPrompt = await fetchNodePrompt('TilesetGeneratorNode');
   if (!baseApiPrompt) {
-    baseApiPrompt = `You are a technical game artist... \nTheme: {theme}\nStyle: {style}\nReference: {reference image}\nSpec: resolution:{resolution}. ratio 1:1.`;
+    baseApiPrompt = `You are a technical game artist... \\nTheme: {theme}\\nStyle: {style}\\nReference: {reference image}\\nSpec: resolution:{resolution}. ratio 1:1.`;
   }
 
   const selectedResolution = nodeData.resolution || "1k";
@@ -462,11 +465,11 @@ export const executeTilesetGeneratorNode = async (nodeData: any, inputs: NodeExe
       const interval = setInterval(async () => {
         try {
           const res = await getTaskStatus(apiKey, response.task_id!);
-          const isDone = res.status === 'succeeded' || (res.status as string) === 'completed' || (res.status as string) === 'success' || !!res.result_url;
+          const isDone = res.status === 'succeeded' || res.status === 'completed' || res.status === 'success' || !!res.result_url;
           if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
             clearInterval(interval);
             resolve({ success: true, data: { outputImage: res.result_url || (res as any).url || (res as any).image_url } });
-          } else if (res.status === 'failed' || (res.status as string) === 'error') {
+          } else if (res.status === 'failed' || res.status === 'error') {
             clearInterval(interval);
             resolve({ success: false, error: "Generation failed." });
           }
@@ -719,3 +722,8 @@ export const executeNode = async (
       return { success: false, error: `Execution for node type '${nodeType}' is not yet implemented headlessly.` };
   }
 };
+"""
+    with open(r"c:\Users\Admin\.gemini\antigravity\scratch\artist-assistant\src\lib\node-executor.ts", "w", encoding="utf-8") as f:
+        f.write(content)
+
+build_executor()

@@ -97,7 +97,7 @@ export default function StyleInsertNode({ id, data, selected }: { id: string; da
         {outputText && <Sparkles className="w-3 h-3 text-yellow-400 animate-pulse" />}
       </div>
 
-      <div className="p-3 space-y-3">
+      <div className="p-4 space-y-3">
         <div className="grid grid-cols-2 gap-2">
           {images.map((img, i) => (
             <div key={i} className="relative aspect-square rounded bg-black/40 overflow-hidden border border-emerald-500/20 group/img flex items-center justify-center">

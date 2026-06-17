@@ -13,7 +13,7 @@ export default function PromptNode({ id, data, selected }: { id: string; data: a
         <MessageSquare className="w-4 h-4 text-blue-400" />
         <span className="font-bold text-xs text-blue-100 uppercase tracking-wider">Prompt Fragment</span>
       </div>
-      <div className="p-3">
+      <div className="p-4">
         <textarea
           className="nodrag w-full bg-[var(--color-blender-input)] text-gray-300 text-sm border border-[var(--color-blender-border)] rounded-sm p-2 focus:outline-none focus:border-[var(--color-blender-accent)] resize-none overflow-hidden"
           placeholder="Enter prompt text..."

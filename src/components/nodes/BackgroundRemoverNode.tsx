@@ -135,6 +135,19 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
       </div>
       
       <div className="p-4 space-y-3">
+        {/* Top Panel: Inputs */}
+        <div className="flex flex-col gap-1 pb-1">
+          <div className="relative flex items-center h-6">
+            <Handle
+              type="target"
+              id="image"
+              position={Position.Left}
+              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
+            />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Image Input</span>
+          </div>
+        </div>
+
         {/* Image Preview with checkerboard pattern to show transparency */}
         <div 
           className="w-full aspect-square border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative"
@@ -189,8 +202,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
         </div>
       </div>
 
-      <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none" style={{ top: '50%' }} />
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none" style={{ top: '50%' }} />
+      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
     </div>
   );
 }

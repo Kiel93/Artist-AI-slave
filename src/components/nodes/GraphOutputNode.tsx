@@ -40,7 +40,20 @@ export default function GraphOutputNode({ id, data, selected }: { id: string; da
         <span className="font-bold text-[10px] text-gray-200 uppercase tracking-wider">Graph Output</span>
       </div>
 
-      <div className="p-3 space-y-3">
+      <div className="p-4 space-y-3">
+        {/* Top Panel: Inputs */}
+        <div className="flex flex-col gap-1 pb-1">
+          <div className="relative flex items-center h-6">
+            <Handle
+              type="target"
+              position={Position.Left}
+              id={outputType}
+              className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px] ${pinColor}`}
+            />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Input</span>
+          </div>
+        </div>
+
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 block">Pin Label</label>
           <input 
@@ -65,13 +78,6 @@ export default function GraphOutputNode({ id, data, selected }: { id: string; da
         </div>
       </div>
 
-      {/* Input handle for internal connections */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id={outputType}
-        className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-10px] ${pinColor}`}
-      />
     </div>
   );
 }

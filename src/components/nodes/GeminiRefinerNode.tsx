@@ -91,6 +91,28 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
       </div>
 
       <div className="p-4 space-y-3">
+        {/* Top Panel: Inputs */}
+        <div className="flex flex-col gap-1 pb-1">
+          <div className="relative flex items-center h-6">
+            <Handle
+              type="target"
+              id="text"
+              position={Position.Left}
+              className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !left-[-24px]"
+            />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Prompt Input</span>
+          </div>
+          <div className="relative flex items-center h-6">
+            <Handle
+              type="target"
+              id="image"
+              position={Position.Left}
+              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
+            />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Reference Image</span>
+          </div>
+        </div>
+
         <div className="relative group">
           <div className={`min-h-[80px] bg-black/40 border border-emerald-500/20 rounded p-2 text-xs text-emerald-100/70 italic ${isCollapsed ? "max-h-24 overflow-hidden" : ""}`}>
             {outputText || "Connect Prompt/Style nodes and click Refine to polish your prompt..."}
@@ -146,26 +168,6 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
           {isRefining ? "Polishing..." : "REFINE PROMPT"}
         </button>
 
-        <div className="flex flex-col gap-1 pt-2 border-t border-emerald-500/20">
-          <div className="relative flex items-center h-6">
-            <Handle
-              type="target"
-              id="text"
-              position={Position.Left}
-              className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !left-[-24px]"
-            />
-            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Prompt Input</span>
-          </div>
-          <div className="relative flex items-center h-6">
-            <Handle
-              type="target"
-              id="image"
-              position={Position.Left}
-              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
-            />
-            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Reference Image</span>
-          </div>
-        </div>
       </div>
 
       {/* Output */}

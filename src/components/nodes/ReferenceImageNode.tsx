@@ -42,7 +42,7 @@ export default function ReferenceImageNode({ id, data, selected }: { id: string;
         <ImageIcon className="w-4 h-4 text-emerald-400" />
         <span className="font-bold text-xs text-emerald-100 uppercase tracking-wider">Image Input</span>
       </div>
-      <div className="p-3">
+      <div className="p-4">
         {imagePreview ? (
           <div className="relative w-full rounded overflow-hidden border border-emerald-500/20 bg-black/50">
             <img src={imagePreview} className="w-full h-auto block" alt="reference" />

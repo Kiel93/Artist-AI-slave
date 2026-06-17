@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { Handle, Position, useReactFlow, useNodes, useEdges } from "reactflow";
-import { Search, RefreshCw, Image as ImageIcon, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
+import { Handle, Position, useReactFlow } from "reactflow";
+import { Search, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
 import { TEXT_MODELS } from "@/lib/plenxai";
 import { GOOGLE_MODELS } from "@/lib/gemini";
-import { explainImageUniversal } from "@/lib/llm-router";
 
 export default function ImageExplainedNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [isExplaining, setIsExplaining] = useState(false);
@@ -14,7 +13,7 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [textProvider, setTextProvider] = useState<"plenxai" | "google">("plenxai");
   
-  const { setNodes } = useReactFlow();
+  const { setNodes, getNodes, getEdges } = useReactFlow();
 
   useEffect(() => {
     setTextProvider((localStorage.getItem("artist-assistant-text-provider") as any) || "plenxai");
@@ -24,91 +23,58 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
   }, []);
 
   const activeModels = textProvider === "google" ? GOOGLE_MODELS : TEXT_MODELS;
-  const nodes = useNodes();
-  const allEdges = useEdges();
-
-  const handles: string[] = data.imageInputs || ["image-0"];
-  const everConnected: Record<string, boolean> = data.everConnected || {};
-
-  // 1. Tracking "Ever Connected" status for handles
-  useEffect(() => {
-    const connectedHandleIds = allEdges
-      .filter(e => e.target === id && e.targetHandle !== "image-plus")
-      .map(e => e.targetHandle);
-    
-    let changed = false;
-    const nextEver = { ...everConnected };
-    connectedHandleIds.forEach(h => {
-      if (h && !nextEver[h]) {
-        nextEver[h] = true;
-        changed = true;
-      }
-    });
-    
-    if (changed) {
-      setNodes(nds => nds.map(n => n.id === id ? { 
-        ...n, 
-        data: { ...n.data, everConnected: nextEver } 
-      } : n));
-    }
-  }, [allEdges, id, everConnected, setNodes]);
-
-  // 2. Handle Auto-Deletion
-  useEffect(() => {
-    const edges = allEdges.filter(e => e.target === id);
-    const connectedHandleIds = edges.map(e => e.targetHandle);
-
-    const nextHandles = handles.filter(h => {
-      const isConnected = connectedHandleIds.includes(h);
-      const isInitial = h === "image-0";
-      const hasBeenUsed = everConnected[h];
-      
-      if (isConnected) return true;
-      if (isInitial && !hasBeenUsed) return true;
-      return false;
-    });
-
-    if (nextHandles.length !== handles.length) {
-      setNodes(nds => nds.map(n => n.id === id ? { 
-        ...n, 
-        data: { ...n.data, imageInputs: nextHandles } 
-      } : n));
-    }
-  }, [allEdges, id, handles, everConnected, setNodes]);
-
-  const getFragmentImage = (handleId: string) => {
-    const edge = allEdges.find(e => e.target === id && e.targetHandle === handleId);
-    if (!edge) return null;
-    const node = nodes.find(n => n.id === edge.source) as any;
-    if (!node) return null;
-    return node.data.outputImage || node.data.image || node.data.referenceImage || node.data.bakedImage || node.data.imageUrl || null;
-  };
-
-  const activeImages = handles.map(h => getFragmentImage(h)).filter(img => img);
-  
-  const generatedPrompt = `Describe what is going on in these ${Math.max(1, activeImages.length)} image(s) in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image. You must write approximately 1000 characters for each image.`;
 
   const handleExplain = async () => {
-    if (activeImages.length === 0) return;
+    const nodes = getNodes();
+    const edges = getEdges();
+    const incomingEdges = edges.filter(e => e.target === id);
+    
+    const imageInputs: string[] = [];
+    
+    incomingEdges.forEach(edge => {
+      const sourceNode = nodes.find(n => n.id === edge.source);
+      if (!sourceNode) return;
+      
+      if (edge.targetHandle === 'image') {
+        const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
+        if (image) imageInputs.push(image);
+        if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
+          imageInputs.push(...sourceNode.data.images);
+        }
+      }
+    });
+
+    if (imageInputs.length === 0) {
+      alert("Please connect an image first.");
+      return;
+    }
 
     setIsExplaining(true);
     try {
-      const response = await explainImageUniversal(activeImages, generatedPrompt, selectedModel);
-      if (response.success && response.text) {
-        setOutputText(response.text);
+      const { executeImageExplainedNode } = await import("@/lib/node-executor");
+      const result = await executeImageExplainedNode(
+        { ...data, model: selectedModel }, 
+        { textInputs: [], imageInputs }, 
+        {}
+      );
+
+      if (result.success && result.data?.outputText) {
+        setOutputText(result.data.outputText);
         setNodes(nds => nds.map(n => n.id === id ? { 
           ...n, 
-          data: { ...n.data, outputText: response.text } 
+          data: { ...n.data, outputText: result.data.outputText } 
         } : n));
       } else {
-        alert("Explanation failed: " + (response.error || (response as any).message || JSON.stringify(response)));
+        alert("Explanation failed: " + result.error);
       }
     } catch (error) {
-      alert("Error calling Gemini API.");
+      alert("Error calling Gemini executor.");
     } finally {
       setIsExplaining(false);
     }
   };
+
+  const generatedPrompt = `Describe what is going on in these image(s) in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image. You must write approximately 1000 characters for each image.`;
 
   return (
     <div className={`w-80 bg-[#1a1525] rounded-lg shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-all duration-200 relative ${
@@ -125,65 +91,21 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
       </div>
 
       <div className="p-3 space-y-4">
-        {/* Dynamic Handle Slots */}
-        {handles.map((hId, idx) => {
-          const fragImg = getFragmentImage(hId);
-          const isConnected = fragImg !== null;
-          
-          return (
-            <div key={hId} className="relative group/slot">
-              {/* Receiver Handle */}
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={hId}
-                className={`!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px] transition-all duration-200 ${
-                  isConnected ? "!scale-110" : ""
-                }`}
-                style={{ top: "50%", transform: "translateY(-50%)" }}
-                title={`Image Input ${hId}`}
-              />
-
-              {isConnected ? (
-                <div className="flex items-center justify-between px-3 py-2.5 rounded-lg border bg-emerald-500/10 border-emerald-500/30 shadow-sm text-emerald-200">
-                  <div className="flex items-center gap-2 opacity-80">
-                    <ImageIcon className="w-4 h-4" />
-                    <span className="text-xs font-medium">Linked Image</span>
-                  </div>
-                  <div className="w-8 h-8 rounded bg-black/40 border border-emerald-500/20 overflow-hidden flex items-center justify-center">
-                    {/* Tiny thumbnail preview if it's base64 or URL */}
-                    {fragImg && typeof fragImg === 'string' && (fragImg.startsWith('data:') || fragImg.startsWith('http')) ? (
-                      <img src={fragImg} alt="preview" className="max-w-full max-h-full object-contain" />
-                    ) : (
-                      <ImageIcon className="w-full h-full p-2 opacity-30" />
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="h-10 w-full bg-[#141b22] rounded-xl border border-emerald-500/10 shadow-inner flex items-center px-3">
-                  <span className="text-xs text-emerald-100/30 italic">Connect an image...</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* The "+" Spawner Handle */}
-        <div className="relative flex items-center h-6 mt-2 mb-2">
-          <Handle
-            type="target"
-            position={Position.Left}
-            id="image-plus"
-            className="!w-5 !h-5 !bg-[#22c55e] !border-none !flex !items-center !justify-center !min-w-0 !min-h-0 !left-[-24px] cursor-crosshair hover:scale-110 transition-transform shadow-md"
-            title="Drop wire here to add a new image input"
-          >
-            <span className="text-[#1a1525] font-black text-lg leading-none mt-[-2px] ml-[1px]">+</span>
-          </Handle>
-          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Add Image</span>
+        {/* Top Panel: Inputs */}
+        <div className="flex flex-col gap-1 pb-1">
+          <div className="relative flex items-center h-6">
+            <Handle
+              type="target"
+              id="image"
+              position={Position.Left}
+              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
+            />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Image Input</span>
+          </div>
         </div>
 
         {/* Model Selection */}
-        <div className="relative z-20 mb-2">
+        <div className="relative z-20">
           <label className="text-[10px] uppercase tracking-wider text-emerald-400/60 font-bold mb-1 block">Generative Model</label>
           <button 
             onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
@@ -217,7 +139,7 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
         </div>
 
         {/* Raw Request Toggle */}
-        <div className="flex justify-end">
+        <div className="flex justify-end mt-2">
           <button 
             onClick={() => setShowRawRequest(!showRawRequest)}
             className="text-[10px] text-emerald-400/70 hover:text-emerald-300 flex items-center gap-1 transition-colors"
@@ -231,7 +153,6 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
           <div className="bg-black/60 border border-emerald-500/30 rounded p-2 text-[10px] text-emerald-100/80 font-mono overflow-auto max-h-32">
             <div className="mb-1 text-emerald-400 font-bold">Prompt to PlenxAI:</div>
             {generatedPrompt}
-            <div className="mt-1 text-emerald-400/50">Number of images: {activeImages.length}</div>
           </div>
         )}
 

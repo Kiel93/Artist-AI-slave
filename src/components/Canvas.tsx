@@ -16,7 +16,7 @@ import ReactFlow, {
   SelectionMode,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { Trash2 } from "lucide-react";
+import { Trash2, Save } from "lucide-react";
 import { getTask, saveTaskFlow } from "@/lib/store";
 
 import PromptNode from "./nodes/PromptNode";
@@ -389,6 +389,56 @@ export default function Canvas({ taskId }: CanvasProps) {
     return { rootNodes: cloneRootNodes, rootEdges: rootEdgesRef.current };
   }, [graphPath]);
 
+  const handleSaveToLibrary = useCallback(() => {
+    if (graphPath.length === 0) return;
+    
+    // Ensure we capture the latest state of the internal nodes/edges into the tree
+    const { rootNodes } = getFullRootGraph();
+    
+    // Find the compound node we are currently inside
+    const targetId = graphPath[graphPath.length - 1].id;
+    
+    let currentNode: Node | null = null;
+    
+    const findNodeDeep = (nodesArray: Node[]) => {
+      for (const n of nodesArray) {
+        if (n.id === targetId) {
+          currentNode = n;
+          return true;
+        }
+        if (n.data?.internalNodes) {
+          if (findNodeDeep(n.data.internalNodes)) return true;
+        }
+      }
+      return false;
+    };
+    
+    findNodeDeep(rootNodes);
+    
+    if (currentNode) {
+      try {
+        const stored = localStorage.getItem("artist-assistant-custom-nodes");
+        const existingNodes = stored ? JSON.parse(stored) : [];
+        
+        // Save the compound node. Give it a new unique library ID.
+        const libraryNode = {
+          id: `lib-node-${Date.now()}`,
+          data: JSON.parse(JSON.stringify(currentNode.data))
+        };
+        
+        existingNodes.push(libraryNode);
+        localStorage.setItem("artist-assistant-custom-nodes", JSON.stringify(existingNodes));
+        
+        // Dispatch event to update sidebar
+        window.dispatchEvent(new CustomEvent('customNodesUpdated'));
+        alert(`Saved "${currentNode.data.label}" to Custom Library!`);
+      } catch (err) {
+        console.error("Failed to save to library:", err);
+        alert("Failed to save to library. Storage might be full.");
+      }
+    }
+  }, [graphPath, getFullRootGraph]);
+
   // Dispatch event whenever graphPath changes
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('graphPathChanged', { detail: { isCompound: graphPath.length > 0 } }));
@@ -546,6 +596,31 @@ export default function Canvas({ taskId }: CanvasProps) {
     (event: React.DragEvent) => {
       event.preventDefault();
 
+      const customDataStr = event.dataTransfer.getData("application/reactflow-custom");
+      if (customDataStr) {
+        saveHistory();
+        try {
+          const customData = JSON.parse(customDataStr);
+          const position = reactFlowInstance.screenToFlowPosition({
+            x: event.clientX,
+            y: event.clientY,
+          });
+
+          // Deep copy and generate new ID
+          const newNode: Node = {
+            id: `compound-${getId()}`,
+            type: 'compound',
+            position,
+            data: JSON.parse(JSON.stringify(customData)),
+          };
+
+          setNodes((nds) => nds.concat(newNode));
+        } catch (e) {
+          console.error("Failed to parse dropped custom node", e);
+        }
+        return;
+      }
+
       const type = event.dataTransfer.getData("application/reactflow");
 
       if (typeof type === "undefined" || !type) {
@@ -648,10 +723,28 @@ export default function Canvas({ taskId }: CanvasProps) {
       const sHandle = connection.sourceHandle || '';
       const tHandle = connection.targetHandle || '';
 
-      const isSourceText = sHandle.includes('text');
-      const isTargetText = tHandle.includes('text') || tHandle.includes('style');
-      const isSourceImage = sHandle.includes('image');
-      const isTargetImage = tHandle.includes('image');
+      let isSourceText = sHandle.includes('text');
+      let isTargetText = tHandle.includes('text') || tHandle.includes('style');
+      let isSourceImage = sHandle.includes('image') || sHandle.includes('img');
+      let isTargetImage = tHandle.includes('image') || tHandle.includes('img');
+
+      if (sourceNode.type === 'compound' && sourceNode.data.outputPins) {
+        const pin = sourceNode.data.outputPins.find((p: any) => (p.id || p) === sHandle);
+        if (pin) {
+           const type = typeof pin === 'string' ? (pin.includes('image') ? 'image' : 'text') : pin.type;
+           isSourceText = type === 'text';
+           isSourceImage = type === 'image';
+        }
+      }
+
+      if (targetNode.type === 'compound' && targetNode.data.inputPins) {
+        const pin = targetNode.data.inputPins.find((p: any) => (p.id || p) === tHandle);
+        if (pin) {
+           const type = typeof pin === 'string' ? (pin.includes('image') ? 'image' : 'text') : pin.type;
+           isTargetText = type === 'text';
+           isTargetImage = type === 'image';
+        }
+      }
 
       if (isSourceText && isTargetText) return true;
       if (isSourceImage && isTargetImage) return true;
@@ -723,6 +816,19 @@ export default function Canvas({ taskId }: CanvasProps) {
                 </div>
               ))}
             </div>
+
+            {graphPath.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-[var(--color-blender-border)]">
+                <button
+                  onClick={handleSaveToLibrary}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded shadow-lg transition-all w-full justify-center"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  Save to Custom Library
+                </button>
+              </div>
+            )}
+
             {graphPath.length === 0 && (
               <p className="text-xs text-gray-400 mt-1">
                 Connect inputs → Gemini Refiner (optional) → PlenxAI Output

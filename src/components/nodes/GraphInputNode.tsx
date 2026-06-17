@@ -40,7 +40,7 @@ export default function GraphInputNode({ id, data, selected }: { id: string; dat
         <span className="font-bold text-[10px] text-gray-200 uppercase tracking-wider">Graph Input</span>
       </div>
 
-      <div className="p-3 space-y-3">
+      <div className="p-4 space-y-3">
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 block">Pin Label</label>
           <input 

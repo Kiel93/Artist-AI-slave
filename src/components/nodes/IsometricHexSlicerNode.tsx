@@ -321,6 +321,14 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
       </div>
 
       <div className="p-4 space-y-3">
+        {/* Top Panel: Inputs */}
+        <div className="flex flex-col gap-1 pb-1">
+          <div className="relative flex items-center h-6">
+            <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Tileset Image Input</span>
+          </div>
+        </div>
+
         <div className="bg-black/30 p-4 border border-emerald-500/20 rounded min-h-[240px] flex items-center justify-center">
           {slices.length > 0 ? (
             <div className="grid grid-cols-4 gap-2 w-full max-h-96 overflow-y-auto pr-1 custom-scrollbar">
@@ -369,11 +377,6 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
           <Scissors className="w-4 h-4 fill-current" />
           SLICE 13 TILES
         </button>
-
-        <div className="relative flex items-center h-6 mt-2">
-          <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
-          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Tileset Image Input</span>
-        </div>
       </div>
 
       <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />

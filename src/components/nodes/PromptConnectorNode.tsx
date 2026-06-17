@@ -114,7 +114,7 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
         </div>
       </div>
 
-      <div className="p-3 space-y-4 overflow-visible">
+      <div className="p-4 space-y-4 overflow-visible">
         {/* Dynamic Handle Slots */}
         {handles.map((hId, idx) => {
           const fragText = getFragmentText(hId);

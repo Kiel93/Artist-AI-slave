@@ -17,8 +17,8 @@ Consistency in color helps users identify data types at a glance:
 ## 2. Layout & Content Standards
 
 ### Vertical Layout Order
-*   **Top Panel**: Reserved for the main prompt (text boxes or text handles).
-*   **Middle Panel**: Reserved for secondary settings, dropdowns, sliders, or additional input handles.
+*   **Top Panel**: Reserved for ANY input handles (e.g. text inputs, image inputs) and the main prompt. All incoming connections must be grouped here at the top.
+*   **Middle Panel**: Reserved for secondary settings, dropdowns, and sliders.
 *   **Bottom Panel**: Reserved for the image preview, placed directly above the action buttons.
 *   **Action Buttons**: Placed at the very bottom of the node.
 
@@ -51,7 +51,7 @@ To ensure all nodes feel like they belong to a cohesive application, adhere to t
 *   **Text Inputs / Textareas**: Should sit recessed within the node. Use `bg-black/40 text-gray-200 p-2 rounded border border-[semantic-color]/20 focus:border-[semantic-color]/60 focus:outline-none`.
 *   **Sliders (Range Inputs)**: Use `w-full accent-[semantic-color]-500` for native HTML range inputs to match the node's theme.
 *   **Icons**: Always use `lucide-react` icons. Give them a standardized size (e.g., `w-5 h-5` for headers, `w-4 h-4` for inline buttons) and tint them with the node's semantic color (e.g., `text-emerald-400`).
-*   **Handle Sizing & Position**: ReactFlow handles should be prominent but clean. Override default classes with `!w-4 !h-4 !border-none`. Do NOT manually offset handles with `!left-` or `!right-` classes. Let React Flow's native positioning snap them perfectly to the left and right edges.
+*   **Handle Sizing & Position**: ReactFlow handles should be prominent but clean. Override default classes with `!w-4 !h-4 !border-none`. Because most node contents are wrapped in padded containers (e.g. `p-3` or `p-4`), you MUST use offset classes like `!left-[-24px]` and `!right-[-10px]` to push the handles out so they perfectly align with the outer stroke of the node, overriding React Flow's native inner-padding snap.
 
 ---
 

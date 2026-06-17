@@ -75,6 +75,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
 
         const textInputs: string[] = [];
         const imageInputs: string[] = [];
+        const namedInputs: Record<string, any> = {};
 
         const incomingEdges = internalEdges.filter((e: any) => e.target === currentNode.id);
         incomingEdges.forEach((e: any) => {
@@ -85,6 +86,9 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
             } else if ((e.targetHandle?.includes('image') || e.targetHandle?.includes('img')) && sourceOutput.outputImage) {
               imageInputs.push(sourceOutput.outputImage);
             }
+            if (e.targetHandle) {
+              namedInputs[e.targetHandle] = sourceOutput;
+            }
           }
         });
 
@@ -92,7 +96,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
           // It was already seeded with external data. Just mark as executed.
           executedCount++;
         } else {
-          const inputs: NodeExecutionInput = { textInputs, imageInputs };
+          const inputs: NodeExecutionInput = { textInputs, imageInputs, namedInputs };
           
           const { executeNode } = await import("@/lib/node-executor");
           const result = await executeNode(currentNode.type, currentNode.data, inputs, context);
@@ -166,6 +170,28 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
       </div>
 
       <div className="p-4 space-y-3">
+        {/* Top Panel: Inputs */}
+        {data.inputPins && data.inputPins.length > 0 && (
+          <div className="flex flex-col gap-1 pb-1">
+            {data.inputPins.map((pin: any) => {
+               const pinId = typeof pin === 'string' ? pin : pin.id;
+               const pinType = typeof pin === 'string' ? (pin.includes('image') ? 'image' : 'text') : pin.type;
+               const pinLabel = typeof pin === 'string' ? pin : pin.label;
+               return (
+                 <div key={pinId} className="relative flex items-center h-6">
+                   <Handle
+                     type="target"
+                     id={pinId}
+                     position={Position.Left}
+                     className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px] ${pinType === 'image' ? '!bg-[#22c55e]' : '!bg-[#3b82f6]'}`}
+                   />
+                   <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">{pinLabel}</span>
+                 </div>
+               );
+            })}
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <div className="text-xs text-purple-200/70">
             Internal Nodes: {data.internalNodes?.length || 0}
@@ -217,24 +243,6 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
           </div>
         )}
 
-        <div className="flex flex-col gap-1 pt-2 border-t border-purple-500/20">
-          {data.inputPins?.map((pin: any) => {
-             const pinId = typeof pin === 'string' ? pin : pin.id;
-             const pinType = typeof pin === 'string' ? (pin.includes('image') ? 'image' : 'text') : pin.type;
-             const pinLabel = typeof pin === 'string' ? pin : pin.label;
-             return (
-               <div key={pinId} className="relative flex items-center h-6">
-                 <Handle
-                   type="target"
-                   id={pinId}
-                   position={Position.Left}
-                   className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px] ${pinType === 'image' ? '!bg-[#22c55e]' : '!bg-[#3b82f6]'}`}
-                 />
-                 <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">{pinLabel}</span>
-               </div>
-             );
-          })}
-        </div>
 
         <div className="flex flex-col gap-1 pt-2 border-t border-purple-500/20">
           {data.outputPins?.map((pin: any) => {
