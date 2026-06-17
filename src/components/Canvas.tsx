@@ -218,7 +218,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     };
 
     // Remove selected nodes and internal edges from canvas
-    const newNodes = currentNodes.filter(n => !selectedIds.has(n.id)).map(n => ({...n, selected: false}));
+    const newNodes: Node[] = currentNodes.filter(n => !selectedIds.has(n.id)).map(n => ({...n, selected: false}));
     newNodes.push(newCompoundNode);
 
     // Remove any edge that touches a selected node (since we can't easily auto-rewire yet)

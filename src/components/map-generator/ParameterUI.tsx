@@ -1084,7 +1084,7 @@ export default function ParameterUI({
         oceanAsset,
         groundAsset,
         objectAssets,
-        decalOverrides: parameters.decalOverrides || {},
+        decalOverrides: decalOverrides || {},
         generatedOceanTiles,
         generatedFoamTiles,
         exportOcean,
