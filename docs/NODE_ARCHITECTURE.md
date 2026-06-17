@@ -89,3 +89,12 @@ To prevent brittle, case-by-case property checking when nodes pass data to one a
 
 **Consuming Data**:
 When a node (like a Refiner or Output node) reads from incoming edges, it should confidently look for `sourceNode.data.outputImage` or `sourceNode.data.outputText` instead of checking a dozen different potential property names.
+
+---
+
+## 8. Headless Execution & Compound Nodes
+To support the Compound Node (Nested Sub-Graphs) architecture, node execution logic must be decoupled from the React UI components.
+
+*   **Logic Extraction**: All API calls, data transformations, and core logic for a node MUST reside in `src/lib/node-executor.ts` as a pure, standalone, asynchronous function (e.g. `executeGeminiRefinerNode`).
+*   **React Integration**: The actual React component (e.g. `GeminiRefinerNode.tsx`) should simply gather inputs, call the executor from `node-executor.ts`, and then update its UI and `data` state with the returned results.
+*   **Compound Nodes**: A `CompoundNode` acts as an automated pipeline. It traverses its `internalNodes` and `internalEdges`, using `executeNode` from `node-executor.ts` to process data from start to finish without needing to render the internal nodes to the canvas. This requires nodes to be able to execute purely based on their configuration `data` and explicit inputs.

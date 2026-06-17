@@ -11,6 +11,14 @@ export interface Task {
   updatedAt?: number;
 }
 
+export interface CompoundNodeData {
+  label: string;
+  internalNodes: any[]; // Nodes within the compound graph
+  internalEdges: any[]; // Edges within the compound graph
+  inputPins?: string[]; // E.g. ['text', 'image']
+  outputPins?: string[]; // E.g. ['image-out']
+}
+
 export interface Project {
   id: string;
   name: string;

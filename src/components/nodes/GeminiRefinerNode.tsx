@@ -29,8 +29,8 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
     const edges = getEdges();
     const incomingEdges = edges.filter(e => e.target === id);
     
-    const promptParts: string[] = [];
-    const imageRefs: string[] = [];
+    const textInputs: string[] = [];
+    const imageInputs: string[] = [];
     
     incomingEdges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
@@ -38,41 +38,39 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
       
       if (edge.targetHandle === 'text') {
         const text = sourceNode.data.outputText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
-        if (text) promptParts.push(text);
+        if (text) textInputs.push(text);
       } else if (edge.targetHandle === 'image') {
         const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
-        if (image) imageRefs.push(image);
+        if (image) imageInputs.push(image);
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
-          imageRefs.push(...sourceNode.data.images);
+          imageInputs.push(...sourceNode.data.images);
         }
       }
     });
 
-    const rawPrompt = promptParts.join(", ");
-    if (!rawPrompt) {
-      alert("No input text found to refine.");
-      return;
-    }
-
     setIsRefining(true);
+    
+    // Import dynamically to avoid circular dependencies if any, or just import at top.
+    // Wait, let's just use the executor directly. We should import it at the top of the file.
     try {
-      let systemPrompt = await fetchNodePrompt('GeminiRefinerNode');
-      if (!systemPrompt) systemPrompt = `You are a prompt engineer. Refine the user's raw idea into a high-quality, detailed prompt for AI image generation. Output ONLY the refined prompt text.\n\nUser Input:\n{prompt}`;
+      const { executeGeminiRefinerNode } = await import("@/lib/node-executor");
+      const result = await executeGeminiRefinerNode(
+        { ...data, model: selectedModel }, 
+        { textInputs, imageInputs }, 
+        {}
+      );
       
-      const finalPrompt = systemPrompt.replace('{prompt}', rawPrompt);
-
-      const response = await generateTextUniversal(finalPrompt, imageRefs.length > 0 ? imageRefs : undefined, selectedModel);
-      if (response.success && response.text) {
-        setOutputText(response.text);
+      if (result.success && result.data?.outputText) {
+        setOutputText(result.data.outputText);
         setNodes(nds => nds.map(n => n.id === id ? { 
           ...n, 
-          data: { ...n.data, outputText: response.text } 
+          data: { ...n.data, outputText: result.data.outputText } 
         } : n));
       } else {
-        alert("Refinement failed: " + (response.error || (response as any).message || JSON.stringify(response)));
+        alert("Refinement failed: " + result.error);
       }
     } catch (error) {
-      alert("Error calling Gemini API.");
+      alert("Error calling Gemini executor.");
     } finally {
       setIsRefining(false);
     }

@@ -60,8 +60,8 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
     // Find all nodes connected to our input handles
     const incomingEdges = edges.filter(e => e.target === id);
     
-    const promptParts: string[] = [];
-    const imageRefs: string[] = [];
+    const textInputs: string[] = [];
+    const imageInputs: string[] = [];
 
     incomingEdges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
@@ -69,19 +69,19 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
 
       if (edge.targetHandle === 'text') {
         const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
-        if (text) promptParts.push(text);
+        if (text) textInputs.push(text);
       } else if (edge.targetHandle?.startsWith('image-') || edge.targetHandle?.startsWith('img-')) {
         const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
-        if (image) imageRefs.push(image);
+        if (image) imageInputs.push(image);
         // Also handle StyleInsertNode or bulk images if connected to an image handle
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
-          imageRefs.push(...sourceNode.data.images);
+          imageInputs.push(...sourceNode.data.images);
         }
       }
     });
 
-    const finalPrompt = promptParts.join(", ");
-    const currentHash = JSON.stringify({ prompt: finalPrompt, images: imageRefs, model: selectedModel });
+    const finalPrompt = textInputs.join(", ");
+    const currentHash = JSON.stringify({ prompt: finalPrompt, images: imageInputs, model: selectedModel });
 
     // 2. Change Detection
     if (status === 'succeeded' && currentHash === lastRunHash && outputImage) {
@@ -106,83 +106,32 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
     setStatus("queueing");
     setError(null);
 
-    const base64Images = imageRefs.filter(img => img.startsWith('data:image'));
-    const urlImages = [...imageRefs.filter(img => !img.startsWith('data:image'))];
-
     try {
-      // Upload base64 images first
-      if (base64Images.length > 0) {
-        console.log(`Uploading ${base64Images.length} base64 images to PlenxAI...`);
-        for (const base64 of base64Images) {
-          try {
-            const uploadRes = await uploadMediaDirect(apiKey, base64);
-            if (uploadRes.success && (uploadRes.url || uploadRes.cdn_url)) {
-              urlImages.push(uploadRes.url || uploadRes.cdn_url);
-            } else {
-              console.warn("Image upload failed:", uploadRes.error);
-            }
-          } catch (uploadErr) {
-            console.error("Error uploading image:", uploadErr);
-          }
-        }
-      }
+      const { executeGeneralImageGenerationNode } = await import("@/lib/node-executor");
+      const result = await executeGeneralImageGenerationNode(
+        { ...data, model: selectedModel },
+        { textInputs, imageInputs },
+        { apiKey }
+      );
 
-      const response = await queueImageGen(apiKey, {
-        prompt: finalPrompt,
-        model: selectedModel,
-        references_urls: urlImages.length > 0 ? urlImages : undefined
-      });
-
-      if (response.success && response.task_id) {
+      if (result.success && result.data?.outputImage) {
+        setOutputImage(result.data.outputImage);
+        setStatus("succeeded");
         setLastRunHash(currentHash);
-        startPolling(response.task_id, apiKey, currentHash);
+        setNodes(nds => nds.map(n => n.id === id ? { 
+          ...n, 
+          data: { ...n.data, outputImage: result.data.outputImage, lastRunHash: currentHash } 
+        } : n));
       } else {
-        setError(response.error || "Failed to queue generation.");
+        setError(result.error || "Generation failed on server.");
         setStatus("failed");
       }
     } catch (err) {
-      setError("Network error.");
+      setError("Network or execution error.");
       setStatus("failed");
     }
   };
 
-  const startPolling = async (taskId: string, apiKey: string, currentHash: string) => {
-    setStatus("polling");
-    
-    const poll = async () => {
-      try {
-        const res = await getTaskStatus(apiKey, taskId);
-        console.log("Polling status:", res);
-        
-        const isDone = res.status === 'succeeded' || (res.status as string) === 'completed' || (res.status as string) === 'success' || !!res.result_url;
-        
-        if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
-          const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
-          setOutputImage(finalUrl);
-          setStatus("succeeded");
-          // Save to node data
-          setNodes(nds => nds.map(n => n.id === id ? { 
-            ...n, 
-            data: { ...n.data, outputImage: finalUrl, lastRunHash: currentHash } 
-          } : n));
-          return true;
-        } else if (res.status === 'failed' || (res.status as string) === 'error') {
-          setError((res as any).error || (res as any).message || "Generation failed on server.");
-          setStatus("failed");
-          return true;
-        }
-        return false;
-      } catch (e) {
-        return false;
-      }
-    };
-
-    // Poll every 3 seconds
-    const interval = setInterval(async () => {
-      const done = await poll();
-      if (done) clearInterval(interval);
-    }, 3000);
-  };
 
   return (
     <div className={`w-80 bg-[#1a1525] rounded-lg shadow-2xl transition-all duration-200 relative ${

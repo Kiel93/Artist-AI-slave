@@ -422,9 +422,28 @@ export default function AssetManager({
                     if (!task.nodes) return null;
                     
                     if (importType === 'ground' || importType === 'ocean') {
+                      const flattenedNodes = task.nodes.flatMap(n => {
+                        if (n.data?.outputImages && Object.keys(n.data.outputImages).length > 0) {
+                          return Object.entries(n.data.outputImages).map(([pinId, url]) => {
+                            const pinInfo = n.data.outputPins?.find((p: any) => p.id === pinId);
+                            const label = pinInfo ? pinInfo.label : pinId;
+                            return {
+                              ...n,
+                              id: `${n.id}-${pinId}`,
+                              data: {
+                                ...n.data,
+                                outputImage: url,
+                                localPrompt: label
+                              }
+                            };
+                          });
+                        }
+                        return [n];
+                      });
+                      
                       const validNodes = importType === 'ground'
-                        ? task.nodes.filter(n => n.type === 'isometricHexSlicer' && n.data?.slices?.some((s: any) => s.name === 'Ground_CenterFill' || s.name === 'CenterFill'))
-                        : task.nodes.filter(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
+                        ? flattenedNodes.filter(n => n.type === 'isometricHexSlicer' && n.data?.slices?.some((s: any) => s.name === 'Ground_CenterFill' || s.name === 'CenterFill'))
+                        : flattenedNodes.filter(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
                         
                       if (validNodes.length === 0) return null;
                       
@@ -468,7 +487,25 @@ export default function AssetManager({
                         </div>
                       );
                     } else {
-                      const objectNodes = task.nodes.filter(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
+                      const objectNodes = task.nodes.flatMap(n => {
+                        if (n.data?.outputImages && Object.keys(n.data.outputImages).length > 0) {
+                          return Object.entries(n.data.outputImages).map(([pinId, url]) => {
+                            const pinInfo = n.data.outputPins?.find((p: any) => p.id === pinId);
+                            const label = pinInfo ? pinInfo.label : pinId;
+                            return {
+                              ...n,
+                              id: `${n.id}-${pinId}`,
+                              data: {
+                                ...n.data,
+                                outputImage: url,
+                                localPrompt: label
+                              }
+                            };
+                          });
+                        }
+                        return [n];
+                      }).filter(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
+                      
                       if (objectNodes.length === 0) return null;
                       
                       return (

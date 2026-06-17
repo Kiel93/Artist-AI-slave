@@ -1,8 +1,23 @@
 "use client";
 
-import { MessageSquare, Link2, Palette, Image as ImageIcon, Sparkles, ImageDown, PenTool, Box, Search, Scissors, Eraser } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MessageSquare, Link2, Palette, Image as ImageIcon, Sparkles, ImageDown, PenTool, Box, Search, Scissors, Eraser, LogIn, LogOut } from "lucide-react";
 
 const NODE_TYPES = [
+  {
+    type: "graphInput",
+    label: "Graph Input",
+    icon: <LogIn className="w-5 h-5 text-gray-400" />,
+    description: "Route external data into Compound Node",
+    isCompoundExclusive: true,
+  },
+  {
+    type: "graphOutput",
+    label: "Graph Output",
+    icon: <LogOut className="w-5 h-5 text-gray-400" />,
+    description: "Route data to Compound Node exterior",
+    isCompoundExclusive: true,
+  },
   {
     type: "prompt",
     label: "Prompt",
@@ -31,7 +46,7 @@ const NODE_TYPES = [
     type: "sketchToImage",
     label: "Sketch Constraint",
     icon: <PenTool className="w-5 h-5 text-orange-400" />,
-    description: "Forces AI to strictly follow sketch",
+    description: "Provide a sketch structure",
   },
   {
     type: "isometricDraw",
@@ -42,8 +57,8 @@ const NODE_TYPES = [
   {
     type: "geminiRefiner",
     label: "Gemini Refiner",
-    icon: <Sparkles className="w-5 h-5 text-emerald-400" />,
-    description: "Central node: Refines inputs (Optional)",
+    icon: <Sparkles className="w-5 h-5 text-yellow-400" />,
+    description: "Refine prompt/style via LLM",
   },
   {
     type: "imageExplained",
@@ -53,9 +68,9 @@ const NODE_TYPES = [
   },
   {
     type: "generalImageGeneration",
-    label: "General Image Gen",
-    icon: <ImageDown className="w-5 h-5 text-amber-400" />,
-    description: "General image generation destination",
+    label: "Image Generation",
+    icon: <ImageDown className="w-5 h-5 text-purple-400" />,
+    description: "Generate final image",
   },
   {
     type: "tilesetGenerator",
@@ -66,8 +81,8 @@ const NODE_TYPES = [
   {
     type: "isometricHexSlicer",
     label: "Hex Slicer",
-    icon: <Scissors className="w-5 h-5 text-emerald-400" />,
-    description: "Dice standard plot into tiles",
+    icon: <Box className="w-5 h-5 text-emerald-400" />,
+    description: "Slice image into isometric hex tiles",
   },
   {
     type: "tileCutter",
@@ -90,10 +105,20 @@ const NODE_TYPES = [
 ];
 
 export default function Sidebar() {
+  const [isCompoundContext, setIsCompoundContext] = useState(false);
+
+  useEffect(() => {
+    const handleContextChange = (e: any) => setIsCompoundContext(e.detail.isCompound);
+    window.addEventListener('graphPathChanged', handleContextChange);
+    return () => window.removeEventListener('graphPathChanged', handleContextChange);
+  }, []);
+
   const onDragStart = (event: React.DragEvent<HTMLDivElement>, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
   };
+
+  const visibleNodes = NODE_TYPES.filter(n => !n.isCompoundExclusive || isCompoundContext);
 
   return (
     <aside className="w-72 bg-[var(--color-blender-panel)] border-l border-[var(--color-blender-border)] flex flex-col h-full shadow-xl z-10">
@@ -103,7 +128,7 @@ export default function Sidebar() {
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {NODE_TYPES.map((node) => (
+        {visibleNodes.map((node) => (
           <div
             key={node.type}
             className="group flex flex-col p-3 bg-[var(--color-blender-node-bg)] border border-[var(--color-blender-border)] rounded-lg cursor-grab hover:border-[var(--color-blender-accent)] hover:shadow-md transition-all duration-200"
