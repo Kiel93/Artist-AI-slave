@@ -57,7 +57,7 @@ export default function ProjectCard({ project, onRename, onDuplicate, onDelete }
   return (
     <div className="relative group">
       <Link href={`/project/${project.id}`}>
-        <div className="bg-[var(--color-blender-panel)] rounded-xl border border-[var(--color-blender-border)] overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl hover:border-gray-500 flex flex-col h-48 cursor-pointer">
+        <div className="bg-[var(--color-blender-panel)] rounded-sm border border-[var(--color-blender-border)] overflow-hidden shadow-sm transition-all duration-300 hover:border-[var(--color-blender-accent)] flex flex-col h-48 cursor-pointer">
           <div 
             className="flex-1 bg-cover bg-center relative"
             style={{ 
@@ -71,7 +71,7 @@ export default function ProjectCard({ project, onRename, onDuplicate, onDelete }
                 <Folder className="w-5 h-5 flex-shrink-0" />
                 <span className="truncate">{project.name}</span>
               </h2>
-              <div className="bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-medium text-gray-200 whitespace-nowrap flex-shrink-0">
+              <div className="bg-black/80 px-2 py-1 rounded-sm text-xs font-mono text-gray-200 whitespace-nowrap flex-shrink-0 border border-[var(--color-blender-border)]">
                 {project.tasks.length} tasks
               </div>
             </div>
@@ -83,14 +83,14 @@ export default function ProjectCard({ project, onRename, onDuplicate, onDelete }
       <div className="absolute top-3 right-3" ref={menuRef}>
         <button 
           onClick={handleMenuClick}
-          className="p-1.5 bg-black/50 hover:bg-black/80 rounded-md text-white transition-colors backdrop-blur-sm opacity-0 group-hover:opacity-100 focus:opacity-100"
+          className="p-1.5 bg-black/80 hover:bg-black rounded-sm text-white transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 border border-[var(--color-blender-border)] hover:border-[var(--color-blender-accent)]"
         >
           <MoreVertical className="w-5 h-5" />
         </button>
 
         {/* Dropdown Menu */}
         {menuOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-md shadow-2xl z-10 py-1">
+          <div className="absolute right-0 mt-2 w-48 bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-sm shadow-xl z-10 py-1">
             <button 
               onClick={handleRename}
               className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[var(--color-blender-hover)] hover:text-white flex items-center gap-2 transition-colors"

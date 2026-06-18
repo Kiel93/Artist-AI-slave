@@ -16,7 +16,7 @@ import ReactFlow, {
   SelectionMode,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { Trash2, Save } from "lucide-react";
+import { Trash2, Save, Download } from "lucide-react";
 import { getTask, saveTaskFlow } from "@/lib/store";
 
 import PromptNode from "./nodes/PromptNode";
@@ -439,6 +439,48 @@ export default function Canvas({ taskId }: CanvasProps) {
     }
   }, [graphPath, getFullRootGraph]);
 
+  const handleExportNode = useCallback(() => {
+    if (graphPath.length === 0) return;
+    
+    const { rootNodes } = getFullRootGraph();
+    const targetId = graphPath[graphPath.length - 1].id;
+    let currentNode: Node | null = null;
+    
+    const findNodeDeep = (nodesArray: Node[]) => {
+      for (const n of nodesArray) {
+        if (n.id === targetId) {
+          currentNode = n;
+          return true;
+        }
+        if (n.data?.internalNodes) {
+          if (findNodeDeep(n.data.internalNodes)) return true;
+        }
+      }
+      return false;
+    };
+    
+    findNodeDeep(rootNodes);
+    
+    if (currentNode) {
+      const exportNode = {
+        id: `lib-node-${Date.now()}`,
+        data: JSON.parse(JSON.stringify(currentNode.data))
+      };
+      
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify([exportNode], null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      
+      // Clean filename
+      const safeName = (currentNode.data.label || "compound-node").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      downloadAnchorNode.setAttribute("download", `${safeName}.json`);
+      
+      document.body.appendChild(downloadAnchorNode); 
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+    }
+  }, [graphPath, getFullRootGraph]);
+
   // Dispatch event whenever graphPath changes
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('graphPathChanged', { detail: { isCompound: graphPath.length > 0 } }));
@@ -795,7 +837,7 @@ export default function Canvas({ taskId }: CanvasProps) {
             className="bg-[var(--color-blender-panel)] border-[var(--color-blender-border)] fill-white"
             showInteractive={false}
           />
-          <Panel position="top-left" className="bg-[var(--color-blender-panel)] px-4 py-2 rounded-md shadow-md border border-[var(--color-blender-border)]">
+          <Panel position="top-left" className="bg-[var(--color-blender-panel)] px-4 py-2 rounded-sm shadow-sm border border-[var(--color-blender-border)]">
             <div className="flex items-center gap-2 text-white font-medium mb-1">
               <button 
                 onClick={() => navigateToLevel(-1)} 
@@ -818,13 +860,20 @@ export default function Canvas({ taskId }: CanvasProps) {
             </div>
 
             {graphPath.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-[var(--color-blender-border)]">
+              <div className="mt-2 pt-2 border-t border-[var(--color-blender-border)] flex flex-col gap-2">
                 <button
                   onClick={handleSaveToLibrary}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded shadow-lg transition-all w-full justify-center"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs font-mono uppercase tracking-wide rounded-sm shadow-sm transition-all w-full justify-center"
                 >
                   <Save className="w-3.5 h-3.5" />
                   Save to Custom Library
+                </button>
+                <button
+                  onClick={handleExportNode}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-blender-node-bg)] hover:bg-[var(--color-blender-hover)] text-gray-300 border border-[var(--color-blender-border)] text-xs font-mono uppercase tracking-wide rounded-sm shadow-sm transition-all w-full justify-center"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export to JSON
                 </button>
               </div>
             )}
@@ -842,7 +891,7 @@ export default function Canvas({ taskId }: CanvasProps) {
               <div className="mt-3 pt-3 border-t border-[var(--color-blender-border)]">
                 <button
                   onClick={handleGroupNodes}
-                  className="w-full py-1.5 px-3 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded shadow-lg transition-all"
+                  className="w-full py-1.5 px-3 bg-amber-700 hover:bg-amber-600 text-white text-xs font-mono uppercase tracking-wide rounded-sm shadow-sm transition-all"
                 >
                   Group Selected (Ctrl+G)
                 </button>
@@ -855,7 +904,7 @@ export default function Canvas({ taskId }: CanvasProps) {
       {/* Trash Can Dropzone */}
       <div
         ref={trashRef}
-        className={`absolute left-[50px] bottom-[50px] w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 z-50 ${isDraggingNode
+        className={`absolute left-[50px] bottom-[50px] w-12 h-12 rounded-sm flex items-center justify-center transition-all duration-300 z-50 border ${isDraggingNode
             ? "bg-red-500/20 border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] opacity-100 scale-100"
             : "opacity-0 scale-90 pointer-events-none"
           }`}

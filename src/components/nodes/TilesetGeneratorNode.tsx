@@ -28,6 +28,12 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
+  const edgesReactFlow = useEdges();
+  const hasTextConnection = edgesReactFlow.some(e => e.target === id && e.targetHandle === 'text');
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [hasTextConnection, id, updateNodeInternals]);
 
   const generateImage = async () => {
     // Gather Inputs
@@ -36,8 +42,7 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
     const incomingEdges = edges.filter(e => e.target === id);
     
     const promptParts: string[] = [];
-    if (localPrompt) promptParts.push(localPrompt);
-
+    let hasTextConnectionGen = false;
     let styleInput = "";
     let inputImageUrl = "";
 
@@ -45,6 +50,7 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'text') {
+        hasTextConnectionGen = true;
         const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
         if (text) promptParts.push(text);
       }
@@ -55,6 +61,10 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
         inputImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
       }
     });
+
+    if (!hasTextConnectionGen && localPrompt) {
+      promptParts.push(localPrompt);
+    }
 
     const themePrompt = promptParts.join(", ") || "Fantasy terrain";
     const styleString = styleInput || "Game art, isometric";
@@ -232,13 +242,19 @@ View: Strict 30-degree isometric.`;
       <div className="p-4 space-y-3">
         <div className="relative">
           <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
-          <textarea
-            className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
-            placeholder="Enter theme (e.g., Lava rocks, glowing magma...)"
-            rows={3}
-            value={localPrompt}
-            onChange={(e) => setLocalPrompt(e.target.value)}
-          />
+          {!hasTextConnection ? (
+            <textarea
+              className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
+              placeholder="Enter theme (e.g., Lava rocks, glowing magma...)"
+              rows={3}
+              value={localPrompt}
+              onChange={(e) => setLocalPrompt(e.target.value)}
+            />
+          ) : (
+            <div className="flex items-center h-6">
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Theme Input</span>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-1">

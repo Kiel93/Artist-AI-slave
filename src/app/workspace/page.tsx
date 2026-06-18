@@ -25,7 +25,7 @@ function WorkspaceContent() {
           <ArrowLeft className="w-4 h-4" />
           Back to Dashboard
         </Link>
-        <div className="flex bg-[var(--color-blender-bg)] rounded-md p-1 border border-[var(--color-blender-border)]">
+        <div className="flex bg-[var(--color-blender-bg)] rounded-sm p-1 border border-[var(--color-blender-border)]">
           <button 
             className={`flex items-center gap-2 px-3 py-1 text-sm rounded-sm transition-colors ${mode === "node" ? "bg-[var(--color-blender-accent)] text-white" : "text-gray-400 hover:text-white hover:bg-[var(--color-blender-hover)]"}`}
             onClick={() => setMode("node")}

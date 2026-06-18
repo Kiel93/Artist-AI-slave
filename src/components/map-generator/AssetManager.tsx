@@ -239,7 +239,7 @@ export default function AssetManager({
         </h2>
         <button 
           onClick={() => setActiveSelection({ type: 'map' })}
-          className={`p-1.5 rounded transition-colors ${activeSelection.type === 'map' ? 'bg-blue-600/30 text-blue-300' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+          className={`p-1.5 rounded-sm transition-colors ${activeSelection.type === 'map' ? 'bg-blue-600/30 text-blue-300' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
           title="Map Settings"
         >
           <Settings className="w-4 h-4" />
@@ -262,11 +262,11 @@ export default function AssetManager({
               <div className="space-y-1">
                 <button 
                   onClick={() => setActiveSelection({ type: 'ground' })}
-                  className={`w-full text-left bg-black/40 border rounded-lg p-2 transition-all flex items-center gap-3 ${
+                  className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center gap-3 ${
                     activeSelection.type === 'ground' ? 'border-emerald-500/60 bg-emerald-900/20' : 'border-transparent hover:border-emerald-500/30'
                   }`}
                 >
-                  <div className="w-10 h-10 bg-black/50 rounded flex items-center justify-center shrink-0 border border-emerald-500/20 overflow-hidden">
+                  <div className="w-10 h-10 bg-black/50 rounded-sm flex items-center justify-center shrink-0 border border-emerald-500/20 overflow-hidden">
                      {groundAsset.slices[0] ? <img alt="image" src={groundAsset.slices[0].url} className="w-8 h-8 object-contain" /> : null}
                   </div>
                   <div className="min-w-0">
@@ -279,11 +279,11 @@ export default function AssetManager({
                   <div className="mt-1 pl-4 border-l border-gray-700 ml-2">
                     <button 
                       onClick={() => setActiveSelection({ type: 'ground_variation' })}
-                      className={`w-full text-left bg-black/40 border rounded-lg p-2 transition-all flex items-center gap-3 ${
+                      className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center gap-3 ${
                         activeSelection.type === 'ground_variation' ? 'border-amber-500/60 bg-amber-900/20' : 'border-transparent hover:border-amber-500/30'
                       }`}
                     >
-                      <div className="w-8 h-8 bg-black/50 rounded flex items-center justify-center shrink-0 border border-amber-500/20 overflow-hidden text-amber-500">
+                      <div className="w-8 h-8 bg-black/50 rounded-sm flex items-center justify-center shrink-0 border border-amber-500/20 overflow-hidden text-amber-500">
                         <Settings className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
@@ -297,7 +297,7 @@ export default function AssetManager({
             ) : (
               <button 
                 onClick={() => openModal('ground')}
-                className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-emerald-500/50 rounded-lg p-3 text-center text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center gap-2 text-xs"
+                className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-emerald-500/50 rounded-sm p-3 text-center text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center gap-2 text-xs"
               >
                 <Plus className="w-4 h-4" /> Import Ground
               </button>
@@ -319,11 +319,11 @@ export default function AssetManager({
             oceanAsset ? (
               <button 
                 onClick={() => setActiveSelection({ type: 'ocean' })}
-                className={`w-full text-left bg-black/40 border rounded-lg p-2 transition-all flex items-center gap-3 ${
+                className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center gap-3 ${
                   activeSelection.type === 'ocean' ? 'border-blue-500/60 bg-blue-900/20' : 'border-transparent hover:border-blue-500/30'
                 }`}
               >
-                <div className="w-10 h-10 bg-black/50 rounded flex items-center justify-center shrink-0 border border-blue-500/20 overflow-hidden">
+                <div className="w-10 h-10 bg-black/50 rounded-sm flex items-center justify-center shrink-0 border border-blue-500/20 overflow-hidden">
                    {oceanAsset.slices[0] ? <img alt="image" src={oceanAsset.slices[0].url} className="w-8 h-8 object-contain" /> : null}
                 </div>
                 <div className="min-w-0">
@@ -334,7 +334,7 @@ export default function AssetManager({
             ) : (
               <button 
                 onClick={() => openModal('ocean')}
-                className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-blue-500/50 rounded-lg p-3 text-center text-gray-400 hover:text-blue-400 transition-colors flex items-center justify-center gap-2 text-xs"
+                className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-blue-500/50 rounded-sm p-3 text-center text-gray-400 hover:text-blue-400 transition-colors flex items-center justify-center gap-2 text-xs"
               >
                 <Plus className="w-4 h-4" /> Import Ocean
               </button>
@@ -362,11 +362,11 @@ export default function AssetManager({
                     <button 
                       key={asset.id}
                       onClick={() => setActiveSelection({ type: 'object', id: asset.id })}
-                      className={`w-full text-left bg-black/40 border rounded-lg p-2 transition-all flex items-center gap-3 ${
+                      className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center gap-3 ${
                         isSelected ? 'border-indigo-500/60 bg-indigo-900/20' : 'border-transparent hover:border-indigo-500/30'
                       }`}
                     >
-                      <div className="w-10 h-10 bg-black/50 rounded flex items-center justify-center shrink-0 border border-indigo-500/20 overflow-hidden">
+                      <div className="w-10 h-10 bg-black/50 rounded-sm flex items-center justify-center shrink-0 border border-indigo-500/20 overflow-hidden">
                         <img alt="image" src={asset.imageUrl} className="w-full h-full object-contain" />
                       </div>
                       <div className="min-w-0">
@@ -380,7 +380,7 @@ export default function AssetManager({
 
               <button 
                 onClick={() => openModal('object')}
-                className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-indigo-500/50 rounded-lg p-3 text-center text-gray-400 hover:text-indigo-400 transition-colors flex items-center justify-center gap-2 text-xs"
+                className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-indigo-500/50 rounded-sm p-3 text-center text-gray-400 hover:text-indigo-400 transition-colors flex items-center justify-center gap-2 text-xs"
               >
                 <Plus className="w-4 h-4" /> Import Object
               </button>
@@ -392,7 +392,7 @@ export default function AssetManager({
                   onChange={handleFileUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <button className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-indigo-500/50 rounded-lg p-3 text-center text-gray-400 hover:text-indigo-400 transition-colors flex items-center justify-center gap-2 text-xs">
+                <button className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-indigo-500/50 rounded-sm p-3 text-center text-gray-400 hover:text-indigo-400 transition-colors flex items-center justify-center gap-2 text-xs">
                   <Upload className="w-4 h-4" /> Upload Local Image
                 </button>
               </div>
@@ -404,7 +404,7 @@ export default function AssetManager({
       {/* Import Modal */}
       {isImportModalOpen && (
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
+          <div className="bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-sm w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
             <div className="p-4 border-b border-[var(--color-blender-border)] flex justify-between items-center">
               <h3 className="font-bold text-lg text-white">
                 {replaceAssetId && replaceAssetId.startsWith('ground_variation_') ? 'Import Variation' : replaceAssetId ? 'Replace Object Asset' : `Import ${importType === 'ground' ? 'Ground Tileset' : 'Object Asset'}`}
@@ -413,7 +413,7 @@ export default function AssetManager({
             </div>
             
             <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              {error && <div className="p-3 bg-red-900/30 border border-red-500/50 rounded text-red-200 text-sm">{error}</div>}
+              {error && <div className="p-3 bg-red-900/30 border border-red-500/50 rounded-sm text-red-200 text-sm">{error}</div>}
               
               {projects.map(project => (
                 <div key={project.id} className="space-y-2">
@@ -450,7 +450,7 @@ export default function AssetManager({
                       const themeColor = importType === 'ground' ? 'emerald' : 'blue';
                       
                       return (
-                        <div key={task.id} className="bg-black/20 rounded p-2 border border-gray-800">
+                        <div key={task.id} className="bg-black/20 rounded-sm p-2 border border-gray-800">
                           <div className="text-xs text-gray-400 mb-2 px-1">{task.name}</div>
                           <div className="grid grid-cols-4 gap-2">
                             {validNodes.map(node => {
@@ -466,7 +466,7 @@ export default function AssetManager({
                                   key={node.id}
                                   onClick={() => handleImportGroundOrOcean(task, importType, node.id)}
                                   disabled={isLoading}
-                                  className={`aspect-square rounded border border-transparent hover:border-${themeColor}-500/40 bg-black/40 overflow-hidden group relative flex items-center justify-center`}
+                                  className={`aspect-square rounded-sm border border-transparent hover:border-${themeColor}-500/40 bg-black/40 overflow-hidden group relative flex items-center justify-center`}
                                   title={importType === 'ground' ? "Hex Slicer Node" : "Image Node"}
                                 >
                                   {imageUrl ? (
@@ -509,7 +509,7 @@ export default function AssetManager({
                       if (objectNodes.length === 0) return null;
                       
                       return (
-                        <div key={task.id} className="bg-black/20 rounded p-2 border border-gray-800">
+                        <div key={task.id} className="bg-black/20 rounded-sm p-2 border border-gray-800">
                           <div className="text-xs text-gray-400 mb-2 px-1">{task.name}</div>
                           <div className="grid grid-cols-4 gap-2">
                             {objectNodes.map(node => {
@@ -520,7 +520,7 @@ export default function AssetManager({
                                   key={node.id}
                                   onClick={() => handleImportObject(task, node)}
                                   disabled={isLoading || !imageUrl}
-                                  className={`aspect-square relative rounded border transition-all flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${
+                                  className={`aspect-square relative rounded-sm border transition-all flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${
                                     isAlreadyImported 
                                       ? 'bg-emerald-900/30 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' 
                                       : 'bg-black/40 border-transparent hover:border-indigo-500/60 hover:bg-indigo-900/40'

@@ -36,10 +36,14 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
           nodeOutputs[e.targetHandle] = { outputText: "", outputImage: "" };
         }
         
-        if (sourceNode.data.outputImage) {
-           nodeOutputs[e.targetHandle].outputImage = sourceNode.data.outputImage;
-        } else if (sourceNode.data.outputText) {
-           nodeOutputs[e.targetHandle].outputText = sourceNode.data.outputText;
+        const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || sourceNode.data.prompt || "";
+
+        if (image) {
+           nodeOutputs[e.targetHandle].outputImage = image;
+        }
+        if (text) {
+           nodeOutputs[e.targetHandle].outputText = text;
         }
       }
     });

@@ -58,7 +58,7 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-            <div className="w-10 h-10 bg-[var(--color-blender-accent)] rounded-lg flex items-center justify-center shadow-lg">
+            <div className="w-10 h-10 bg-[var(--color-blender-accent)] rounded-sm flex items-center justify-center shadow-md">
               <ImageIcon className="text-white w-6 h-6" />
             </div>
             Artist Assistant Hub
@@ -67,7 +67,7 @@ export default function Dashboard() {
             <SettingsMenu />
             <button 
               onClick={handleNewProject}
-              className="flex items-center gap-2 bg-[var(--color-blender-accent)] hover:bg-[var(--color-blender-hover)] text-white px-4 py-2 rounded-md transition-colors shadow-md font-medium"
+              className="flex items-center gap-2 bg-[var(--color-blender-accent)] hover:bg-[var(--color-blender-hover)] text-white px-4 py-2 rounded-sm transition-colors shadow-sm font-mono text-sm uppercase tracking-wider"
             >
               <Plus className="w-4 h-4" />
               New Project
@@ -89,7 +89,7 @@ export default function Dashboard() {
                   <Link 
                     key={task.id} 
                     href={`/workspace?task=${task.id}`}
-                    className="bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-lg p-4 hover:bg-[var(--color-blender-hover)] transition-colors group cursor-pointer"
+                    className="bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-sm p-4 hover:border-[var(--color-blender-accent)] transition-colors group cursor-pointer"
                   >
                     <div className="text-sm font-medium text-white truncate">{task.name}</div>
                     <div className="text-xs text-gray-400 mt-1 truncate">{project?.name || 'Unknown Project'}</div>
@@ -119,13 +119,13 @@ export default function Dashboard() {
             ))}
             
             {projects.length === 0 && (
-              <div className="col-span-full py-12 text-center border-2 border-dashed border-[var(--color-blender-border)] rounded-xl bg-black/20">
+              <div className="col-span-full py-12 text-center border border-dashed border-[var(--color-blender-border)] rounded-sm bg-black/20">
                 <ImageIcon className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                 <h3 className="text-lg font-medium text-gray-300">No projects yet</h3>
                 <p className="text-gray-500 mt-1 mb-4">Create your first project to get started.</p>
                 <button 
                   onClick={handleNewProject}
-                  className="inline-flex items-center gap-2 bg-[var(--color-blender-panel)] hover:bg-[var(--color-blender-hover)] text-white px-4 py-2 rounded-md transition-colors border border-[var(--color-blender-border)]"
+                  className="inline-flex items-center gap-2 bg-[var(--color-blender-panel)] hover:bg-[var(--color-blender-hover)] hover:border-[var(--color-blender-accent)] text-white px-4 py-2 rounded-sm transition-colors border border-[var(--color-blender-border)] font-mono text-sm uppercase"
                 >
                   <Plus className="w-4 h-4" />
                   New Project

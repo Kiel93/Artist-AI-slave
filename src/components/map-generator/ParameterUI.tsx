@@ -222,7 +222,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
   };
 
   return (
-    <div className="space-y-2 bg-black/20 p-2 rounded border border-indigo-500/10 relative z-20">
+    <div className="space-y-2 bg-black/20 p-2 rounded-sm border border-indigo-500/10 relative z-20">
       <div className="flex justify-between items-center">
         <span className="text-[10px] text-indigo-200 font-medium">Cast Shadow</span>
         <button
@@ -238,7 +238,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
           <div className="relative z-30">
             <button
               onClick={() => setIsMethodMenuOpen(!isMethodMenuOpen)}
-              className="w-full bg-black/40 border border-indigo-500/20 rounded px-2 py-1 flex items-center justify-between hover:border-indigo-500/40 transition-colors"
+              className="w-full bg-black/40 border border-indigo-500/20 rounded-sm px-2 py-1 flex items-center justify-between hover:border-indigo-500/40 transition-colors"
             >
               <span className="text-[10px] text-indigo-100 font-medium truncate pr-2">
                 {SHADOW_METHODS.find(m => m.id === method)?.name || "Method"}
@@ -247,7 +247,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             </button>
 
             {isMethodMenuOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a2230] border border-indigo-500/30 rounded shadow-2xl overflow-hidden animate-in fade-in">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a2230] border border-indigo-500/30 rounded-sm shadow-2xl overflow-hidden animate-in fade-in">
                 {SHADOW_METHODS.map((m) => (
                   <button
                     key={m.id}
@@ -273,7 +273,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="0" max="20" value={blur}
               onChange={(e) => updateAsset(asset.id, { shadowBlur: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -285,7 +285,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="0" max="100" value={fade}
               onChange={(e) => updateAsset(asset.id, { shadowFade: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -297,7 +297,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="-90" max="90" value={skew}
               onChange={(e) => updateAsset(asset.id, { shadowSkew: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -309,7 +309,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="0" max="100" value={opacity}
               onChange={(e) => updateAsset(asset.id, { shadowOpacity: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
           <div className="space-y-1">
@@ -320,7 +320,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="0" max="200" value={scaleX}
               onChange={(e) => updateAsset(asset.id, { shadowScaleX: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -332,7 +332,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="0" max="200" value={scaleY}
               onChange={(e) => updateAsset(asset.id, { shadowScaleY: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -344,7 +344,7 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="-100" max="100" value={offsetX}
               onChange={(e) => updateAsset(asset.id, { shadowOffsetX: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -356,20 +356,20 @@ function ObjectShadowEditor({ asset, updateAsset }: { asset: ObjectAsset, update
             <input
               type="range" min="-100" max="100" value={offsetY}
               onChange={(e) => updateAsset(asset.id, { shadowOffsetY: parseInt(e.target.value) })}
-              className="w-full h-1 bg-indigo-900/50 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-indigo-900/50 rounded-sm appearance-none cursor-pointer accent-indigo-500"
             />
           </div>
 
           <div className="flex gap-2 pt-2">
             <button
               onClick={saveDefault}
-              className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[10px] py-1 rounded transition-colors border border-indigo-500/30"
+              className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[10px] py-1 rounded-sm transition-colors border border-indigo-500/30"
             >
               Make Default
             </button>
             <button
               onClick={loadDefault}
-              className="flex-1 bg-black/40 hover:bg-black/60 text-indigo-200 text-[10px] py-1 rounded transition-colors border border-indigo-500/30"
+              className="flex-1 bg-black/40 hover:bg-black/60 text-indigo-200 text-[10px] py-1 rounded-sm transition-colors border border-indigo-500/30"
             >
               Load Default
             </button>
@@ -544,19 +544,19 @@ function AssetFootprintEditor({ asset, onChange, onOffsetChange, groundAsset }: 
         </div>
         <div className="flex items-center gap-1 bg-black/40 p-1 rounded-md border border-[var(--color-blender-border)]">
           <button
-            className={`p-1.5 rounded ${activeTool === 'paint' ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded-sm ${activeTool === 'paint' ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTool('paint')} title="Paint Tile"
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button
-            className={`p-1.5 rounded ${activeTool === 'erase' ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded-sm ${activeTool === 'erase' ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTool('erase')} title="Erase Tile"
           >
             <Eraser className="w-3.5 h-3.5" />
           </button>
           <button
-            className={`p-1.5 rounded ${activeTool === 'drag' ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded-sm ${activeTool === 'drag' ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTool('drag')} title="Align Grid"
           >
             <Move className="w-3.5 h-3.5" />
@@ -565,7 +565,7 @@ function AssetFootprintEditor({ asset, onChange, onOffsetChange, groundAsset }: 
       </div>
       <div
         ref={containerRef}
-        className="relative w-full flex justify-center bg-black/20 rounded-lg overflow-hidden border border-[var(--color-blender-border)] cursor-crosshair"
+        className="relative w-full flex justify-center bg-black/20 rounded-sm overflow-hidden border border-[var(--color-blender-border)] cursor-crosshair"
         style={{ height: svgH }}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -667,7 +667,7 @@ function ObjectSettingsPanel({ objId, objectAssets, updateObjectAsset, removeObj
           type="text"
           value={asset.name || asset.nodePrompt || "Unnamed Object"}
           onChange={(e) => updateObjectAsset(asset.id, { name: e.target.value })}
-          className="w-full bg-black/40 border border-indigo-500/30 rounded p-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-500/80"
+          className="w-full bg-black/40 border border-indigo-500/30 rounded-sm p-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-500/80"
           placeholder="Enter asset name..."
         />
       </div>
@@ -677,7 +677,7 @@ function ObjectSettingsPanel({ objId, objectAssets, updateObjectAsset, removeObj
         <select
           value={asset.unityType || 'mineral'}
           onChange={(e) => updateObjectAsset(asset.id, { unityType: e.target.value as 'mineral' | 'building' })}
-          className="w-full bg-black/40 border border-indigo-500/30 rounded p-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-500/80"
+          className="w-full bg-black/40 border border-indigo-500/30 rounded-sm p-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-500/80"
         >
           <option value="mineral">Mineral (Obstacle/Resource)</option>
           <option value="building">Building (Structure)</option>
@@ -799,12 +799,12 @@ function ObjectSettingsPanel({ objId, objectAssets, updateObjectAsset, removeObj
                 type="number"
                 value={asset.amount || 0}
                 onChange={(e) => updateObjectAsset(asset.id, { amount: parseInt(e.target.value) || 0 })}
-                className="w-full bg-black/40 border border-indigo-500/30 rounded px-2 py-1.5 text-sm text-white mb-2"
+                className="w-full bg-black/40 border border-indigo-500/30 rounded-sm px-2 py-1.5 text-sm text-white mb-2"
                 min="0"
               />
               <button
                 onClick={() => onSpawnObjects && onSpawnObjects(asset.id, asset.amount || 0)}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-1.5 rounded transition-colors"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-1.5 rounded-sm transition-colors"
               >
                 Spawn Instances
               </button>
@@ -1288,7 +1288,7 @@ export default function ParameterUI({
     <div className="space-y-6">
       <div className="relative">
         {hasManualEdits && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-10 rounded-lg flex flex-col items-center justify-center p-4 text-center border border-yellow-500/30">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-10 rounded-sm flex flex-col items-center justify-center p-4 text-center border border-yellow-500/30">
             <AlertTriangle className="w-8 h-8 text-yellow-400 mb-2" />
             <h4 className="text-sm font-bold text-gray-200 mb-1">Parameters Locked</h4>
             <p className="text-xs text-gray-400 mb-4">You have manual map edits. Changing procedural parameters will overwrite them.</p>
@@ -1298,7 +1298,7 @@ export default function ParameterUI({
                   onClearManualEdits();
                 }
               }}
-              className="bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-200 border border-yellow-500/50 px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+              className="bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-200 border border-yellow-500/50 px-4 py-2 rounded-sm text-xs font-bold transition-colors"
             >
               Clear Edits & Unlock
             </button>
@@ -1318,7 +1318,7 @@ export default function ParameterUI({
                 max="500"
                 value={parameters.canvasWidth || 20}
                 onChange={handleMapChange}
-                className="w-16 bg-black/40 border border-gray-600 rounded px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
+                className="w-16 bg-black/40 border border-gray-600 rounded-sm px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
               />
             </div>
             <input
@@ -1338,7 +1338,7 @@ export default function ParameterUI({
                 max="500"
                 value={parameters.canvasHeight || 20}
                 onChange={handleMapChange}
-                className="w-16 bg-black/40 border border-gray-600 rounded px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
+                className="w-16 bg-black/40 border border-gray-600 rounded-sm px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
               />
             </div>
             <input
@@ -1362,7 +1362,7 @@ export default function ParameterUI({
                 max="500"
                 value={parameters.islandWidth || 20}
                 onChange={handleMapChange}
-                className="w-16 bg-black/40 border border-gray-600 rounded px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
+                className="w-16 bg-black/40 border border-gray-600 rounded-sm px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
               />
             </div>
             <input
@@ -1382,7 +1382,7 @@ export default function ParameterUI({
                 max="500"
                 value={parameters.islandHeight || 20}
                 onChange={handleMapChange}
-                className="w-16 bg-black/40 border border-gray-600 rounded px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
+                className="w-16 bg-black/40 border border-gray-600 rounded-sm px-1 text-xs text-blue-300 text-right focus:border-blue-500 outline-none"
               />
             </div>
             <input
@@ -1409,11 +1409,11 @@ export default function ParameterUI({
             <div className="flex gap-2">
               <input
                 type="number" name="seed" value={parameters.seed} onChange={handleMapChange}
-                className="bg-black/40 border border-gray-600 rounded px-2 py-1.5 text-sm w-full text-gray-200 focus:border-blue-500 outline-none"
+                className="bg-black/40 border border-gray-600 rounded-sm px-2 py-1.5 text-sm w-full text-gray-200 focus:border-blue-500 outline-none"
               />
               <button
                 onClick={() => setParameters({ ...parameters, seed: Math.floor(Math.random() * 10000) })}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded text-xs transition-colors font-medium whitespace-nowrap"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded-sm text-xs transition-colors font-medium whitespace-nowrap"
               >
                 Random
               </button>
@@ -1426,25 +1426,25 @@ export default function ParameterUI({
       <div className="pt-4 border-t border-[var(--color-blender-border)]">
         <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">Exporting</h3>
 
-        <div className="space-y-2 mb-4 bg-black/20 p-3 rounded border border-gray-700/50">
+        <div className="space-y-2 mb-4 bg-black/20 p-3 rounded-sm border border-gray-700/50">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={exportOcean} onChange={e => setExportOcean(e.target.checked)} className="rounded bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
+            <input type="checkbox" checked={exportOcean} onChange={e => setExportOcean(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
             <span className="text-xs text-gray-300">Ocean & Foam Tiles</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={exportGround} onChange={e => setExportGround(e.target.checked)} className="rounded bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
+            <input type="checkbox" checked={exportGround} onChange={e => setExportGround(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
             <span className="text-xs text-gray-300">Ground Tiles</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={exportObjects} onChange={e => setExportObjects(e.target.checked)} className="rounded bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
+            <input type="checkbox" checked={exportObjects} onChange={e => setExportObjects(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
             <span className="text-xs text-gray-300">Object Assets</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={exportGrid} onChange={e => setExportGrid(e.target.checked)} className="rounded bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
+            <input type="checkbox" checked={exportGrid} onChange={e => setExportGrid(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
             <span className="text-xs text-gray-300">Buildable Grid</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={exportBlueprints} onChange={e => setExportBlueprints(e.target.checked)} className="rounded bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
+            <input type="checkbox" checked={exportBlueprints} onChange={e => setExportBlueprints(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
             <span className="text-xs text-gray-300">Include Initial Setup Kit</span>
           </label>
         </div>
@@ -1452,7 +1452,7 @@ export default function ParameterUI({
         <button
           onClick={handleUnityExport}
           disabled={isDownloading}
-          className={`w-full flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/50 py-2 rounded-lg text-sm font-semibold transition-colors ${isDownloading ? 'opacity-50 animate-pulse' : ''}`}
+          className={`w-full flex items-center justify-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/50 py-2 rounded-sm text-sm font-semibold transition-colors ${isDownloading ? 'opacity-50 animate-pulse' : ''}`}
           title="Export to Unity"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m11.23 2 10.02 5.01-10.02 5.01-10.02-5.01L11.23 2z" /><path d="M1.2 7.01v10.02L11.22 22v-10l-10.02-4.99z" /><path d="m11.23 11.99 10.02-4.99v10.02l-10.02 5.01v-10.04z" /></svg>
@@ -1478,15 +1478,15 @@ export default function ParameterUI({
 
         <div className="grid grid-cols-2 gap-2 mt-2">
           {asset.slices.map((slice, idx) => (
-            <div key={idx} className="flex flex-col gap-1 p-2 bg-black/40 border border-[var(--color-blender-border)] rounded relative group">
+            <div key={idx} className="flex flex-col gap-1 p-2 bg-black/40 border border-[var(--color-blender-border)] rounded-sm relative group">
               <span className="text-[10px] text-gray-400 text-center truncate" title={slice.name}>{slice.name}</span>
-              <img src={slice.url} alt={slice.name} className="w-full aspect-square object-contain bg-black/50 rounded" />
+              <img src={slice.url} alt={slice.name} className="w-full aspect-square object-contain bg-black/50 rounded-sm" />
 
               <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <a href={slice.url} download={`Tile_${slice.name}.png`} className="p-1 bg-black/80 rounded text-emerald-400 hover:text-emerald-300" title="Download">
+                <a href={slice.url} download={`Tile_${slice.name}.png`} className="p-1 bg-black/80 rounded-sm text-emerald-400 hover:text-emerald-300" title="Download">
                   <Download className="w-3 h-3" />
                 </a>
-                <label className="p-1 bg-black/80 rounded text-yellow-400 hover:text-yellow-300 cursor-pointer" title="Upload Replacement">
+                <label className="p-1 bg-black/80 rounded-sm text-yellow-400 hover:text-yellow-300 cursor-pointer" title="Upload Replacement">
                   <Upload className="w-3 h-3" />
                   <input
                     type="file" accept="image/*" className="hidden"
@@ -1604,10 +1604,10 @@ export default function ParameterUI({
           {!slice ? (
             <p className="text-xs text-gray-500">CenterFill tile not found.</p>
           ) : (
-            <div className="bg-black/20 border border-[var(--color-blender-border)] rounded overflow-hidden p-3 space-y-3">
+            <div className="bg-black/20 border border-[var(--color-blender-border)] rounded-sm overflow-hidden p-3 space-y-3">
               {/* Original */}
-              <div className="flex items-center gap-3 p-2 bg-black/40 border border-gray-800 rounded">
-                <img src={slice.url} className="w-10 h-10 object-contain bg-black/50 rounded border border-gray-700" />
+              <div className="flex items-center gap-3 p-2 bg-black/40 border border-gray-800 rounded-sm">
+                <img src={slice.url} className="w-10 h-10 object-contain bg-black/50 rounded-sm border border-gray-700" />
                 <div className="flex flex-col flex-1">
                   <span className="text-xs font-bold text-gray-200">Original Tile</span>
                   <span className="text-[10px] text-gray-500">Base</span>
@@ -1621,14 +1621,14 @@ export default function ParameterUI({
                 return (
                   <div
                     key={vIdx}
-                    className={`flex flex-col gap-2 p-2 bg-black/40 border rounded relative group cursor-pointer transition-colors ${isSelected ? 'border-amber-500/60 bg-amber-900/20' : 'border-amber-900/30 hover:border-amber-500/30'}`}
+                    className={`flex flex-col gap-2 p-2 bg-black/40 border rounded-sm relative group cursor-pointer transition-colors ${isSelected ? 'border-amber-500/60 bg-amber-900/20' : 'border-amber-900/30 hover:border-amber-500/30'}`}
                     onClick={(e) => {
                       if ((e.target as HTMLElement).tagName.toLowerCase() === 'input' || (e.target as HTMLElement).closest('button')) return;
                       if (setActiveSelection) setActiveSelection({ type: 'ground_variation', id: variationId });
                     }}
                   >
                     <div className="flex items-center gap-3">
-                      <img src={v.url} className="w-10 h-10 object-contain bg-black/50 rounded border border-amber-500/30" />
+                      <img src={v.url} className="w-10 h-10 object-contain bg-black/50 rounded-sm border border-amber-500/30" />
                       <div className="flex flex-col flex-1">
                         <span className="text-xs font-bold text-gray-200">Variation {vIdx + 1}</span>
                       </div>
@@ -1682,7 +1682,7 @@ export default function ParameterUI({
                             };
                             origImg.src = slice.url;
                           }}
-                          className="p-1 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 rounded text-indigo-300 transition-colors"
+                          className="p-1 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 rounded-sm text-indigo-300 transition-colors"
                           title="Download Finalized Tile"
                         >
                           <Download className="w-3 h-3" />
@@ -1699,7 +1699,7 @@ export default function ParameterUI({
                             newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
                             setGroundAsset!({ ...groundAsset!, slices: newSlices });
                           }}
-                          className="w-16 bg-black/40 text-gray-200 p-1 rounded border border-gray-700 text-xs text-right"
+                          className="w-16 bg-black/40 text-gray-200 p-1 rounded-sm border border-gray-700 text-xs text-right"
                         />
                       </div>
                       <button
@@ -1708,7 +1708,7 @@ export default function ParameterUI({
                           newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newSlices[centerSliceIdx!].variations!.filter((_, i) => i !== vIdx) };
                           setGroundAsset!({ ...groundAsset!, slices: newSlices });
                         }}
-                        className="absolute top-2 right-2 p-1 bg-red-900/80 rounded text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 p-1 bg-red-900/80 rounded-sm text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -1727,7 +1727,7 @@ export default function ParameterUI({
                             newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
                             setGroundAsset!({ ...groundAsset!, slices: newSlices });
                           }}
-                          className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+                          className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
                         />
                         <span className="text-[10px] text-gray-300 w-6 text-right">{(v.opacity ?? 1).toFixed(2)}</span>
                       </div>
@@ -1744,7 +1744,7 @@ export default function ParameterUI({
                             newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
                             setGroundAsset!({ ...groundAsset!, slices: newSlices });
                           }}
-                          className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+                          className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
                         />
                         <span className="text-[10px] text-gray-300 w-6 text-right">{v.seamSmoothing ?? 0}</span>
                       </div>
@@ -1754,10 +1754,10 @@ export default function ParameterUI({
               })}
 
               <div className="flex gap-2 mt-3 pt-2 border-t border-[var(--color-blender-border)]">
-                <button onClick={() => onRequestReplaceNode?.(`ground_variation_${centerSliceIdx!}`)} className="flex-1 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-colors">
+                <button onClick={() => onRequestReplaceNode?.(`ground_variation_${centerSliceIdx!}`)} className="flex-1 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold rounded-sm flex items-center justify-center gap-1 transition-colors">
                   <ImageIcon className="w-3 h-3" /> From Node
                 </button>
-                <label className="flex-1 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-colors cursor-pointer">
+                <label className="flex-1 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold rounded-sm flex items-center justify-center gap-1 transition-colors cursor-pointer">
                   <Upload className="w-3 h-3" /> Upload
                   <input
                     type="file" accept="image/*" className="hidden"
@@ -1787,7 +1787,7 @@ export default function ParameterUI({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Dynamic Decals</h4>
-            <label className="text-[10px] bg-amber-600/20 text-amber-300 hover:bg-amber-600/40 px-2 py-1 rounded cursor-pointer transition-colors flex items-center gap-1 border border-amber-500/30">
+            <label className="text-[10px] bg-amber-600/20 text-amber-300 hover:bg-amber-600/40 px-2 py-1 rounded-sm cursor-pointer transition-colors flex items-center gap-1 border border-amber-500/30">
               <Upload className="w-3 h-3" /> Import Decal
               <input
                 type="file" accept="image/*" className="hidden"
@@ -1821,7 +1821,7 @@ export default function ParameterUI({
               decalAssets.map((decal, idx) => (
                 <div
                   key={decal.id}
-                  className={`p-2 border rounded relative group transition-colors cursor-pointer ${activeSelection.type === 'ground_variation' && activeSelection.id === decal.id ? 'bg-amber-900/20 border-amber-500/60' : 'bg-black/20 border-gray-800 hover:border-amber-500/30'}`}
+                  className={`p-2 border rounded-sm relative group transition-colors cursor-pointer ${activeSelection.type === 'ground_variation' && activeSelection.id === decal.id ? 'bg-amber-900/20 border-amber-500/60' : 'bg-black/20 border-gray-800 hover:border-amber-500/30'}`}
                   onClick={(e) => {
                     // prevent selecting if interacting with slider or trash
                     if ((e.target as HTMLElement).tagName.toLowerCase() === 'input' || (e.target as HTMLElement).closest('button')) return;
@@ -1829,7 +1829,7 @@ export default function ParameterUI({
                   }}
                 >
                   <div className="flex gap-3 items-center mb-2">
-                    <img src={decal.imageUrl} className="w-10 h-10 object-contain bg-black/50 border border-gray-700 rounded" />
+                    <img src={decal.imageUrl} className="w-10 h-10 object-contain bg-black/50 border border-gray-700 rounded-sm" />
                     <div className="flex-1 min-w-0 text-xs font-medium text-gray-200 truncate">{decal.name}</div>
                     <button
                       onClick={() => setDecalAssets && setDecalAssets(decalAssets.filter(d => d.id !== decal.id))}
@@ -1851,7 +1851,7 @@ export default function ParameterUI({
                             setDecalAssets(newDecals);
                           }
                         }}
-                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
                       />
                       <span className="text-[10px] text-gray-300 w-6 text-right">{decal.size.toFixed(1)}</span>
                     </div>
@@ -1867,7 +1867,7 @@ export default function ParameterUI({
                             setDecalAssets(newDecals);
                           }
                         }}
-                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
                       />
                       <span className="text-[10px] text-gray-300 w-6 text-right">{decal.opacity.toFixed(2)}</span>
                     </div>
@@ -1883,7 +1883,7 @@ export default function ParameterUI({
                             setDecalAssets(newDecals);
                           }
                         }}
-                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
                       />
                       <span className="text-[10px] text-gray-300 w-6 text-right">{decal.smoothing}</span>
                     </div>
@@ -1961,7 +1961,7 @@ export default function ParameterUI({
             </div>
 
             {parameters.oceanTaperLevels > 0 && (
-              <div className="bg-black/20 p-3 rounded border border-[var(--color-blender-border)] space-y-3">
+              <div className="bg-black/20 p-3 rounded-sm border border-[var(--color-blender-border)] space-y-3">
                 <h4 className="text-[10px] font-bold text-gray-500 uppercase">Taper Distances</h4>
                 {Array.from({ length: parameters.oceanTaperLevels }).map((_, i) => {
                   const lvl = i + 1;
@@ -1974,7 +1974,7 @@ export default function ParameterUI({
                           <span className="text-[10px] text-blue-300">{currentWidth} tile{currentWidth !== 1 ? 's' : ''}</span>
                           <button
                             onClick={() => onClearOceanOverrides?.(lvl)}
-                            className="text-[10px] bg-red-900/40 text-red-300 hover:bg-red-900/60 hover:text-white px-2 py-0.5 rounded border border-red-700/50 transition-colors"
+                            className="text-[10px] bg-red-900/40 text-red-300 hover:bg-red-900/60 hover:text-white px-2 py-0.5 rounded-sm border border-red-700/50 transition-colors"
                             title={`Reset painted tiles for Level ${lvl}`}
                           >
                             Reset Paint
@@ -2007,7 +2007,7 @@ export default function ParameterUI({
               />
             </div>
             <button
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-1.5 rounded flex items-center justify-center gap-2 transition-colors mt-4"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-1.5 rounded-sm flex items-center justify-center gap-2 transition-colors mt-4"
               onClick={() => {
                 // Trigger download tapered collection
                 window.dispatchEvent(new CustomEvent('downloadTaperedOcean'));
@@ -2026,13 +2026,13 @@ export default function ParameterUI({
         </button>
         {openOceanSection === 'foam' && (
           <div className="space-y-4 pt-2">
-            <div className="bg-black/20 rounded border border-[var(--color-blender-border)] overflow-hidden">
+            <div className="bg-black/20 rounded-sm border border-[var(--color-blender-border)] overflow-hidden">
               <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white/5 transition-colors">
                 <input
                   type="checkbox"
                   checked={parameters.oceanAddFoam || false}
                   onChange={(e) => setParameters({ ...parameters, oceanAddFoam: e.target.checked })}
-                  className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                  className="rounded-sm border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
                 />
                 <span className="text-xs text-gray-300 font-semibold flex-1">Enable Foam Shoreline</span>
               </label>
@@ -2094,14 +2094,14 @@ export default function ParameterUI({
               <div>
                 <h4 className="text-xs font-semibold text-gray-300 mb-2">Base Ocean Tile</h4>
                 <div className="flex gap-2">
-                  <div className="flex flex-col gap-1 p-1 bg-black/40 border border-[var(--color-blender-border)] rounded relative group w-24">
+                  <div className="flex flex-col gap-1 p-1 bg-black/40 border border-[var(--color-blender-border)] rounded-sm relative group w-24">
                     <span className="text-[9px] text-gray-400 text-center truncate">Base</span>
-                    <img alt="image" src={oceanAsset.slices[0].url} className="w-full aspect-square object-contain bg-black/50 rounded" />
+                    <img alt="image" src={oceanAsset.slices[0].url} className="w-full aspect-square object-contain bg-black/50 rounded-sm" />
                     <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <a href={oceanAsset.slices[0].url} download="OceanBase.png" className="p-1 bg-black/80 rounded text-emerald-400 hover:text-emerald-300">
+                      <a href={oceanAsset.slices[0].url} download="OceanBase.png" className="p-1 bg-black/80 rounded-sm text-emerald-400 hover:text-emerald-300">
                         <Download className="w-3 h-3" />
                       </a>
-                      <label className="p-1 bg-black/80 rounded text-yellow-400 hover:text-yellow-300 cursor-pointer">
+                      <label className="p-1 bg-black/80 rounded-sm text-yellow-400 hover:text-yellow-300 cursor-pointer">
                         <Upload className="w-3 h-3" />
                         <input
                           type="file" accept="image/*" className="hidden"
@@ -2141,7 +2141,7 @@ export default function ParameterUI({
 
               const isExpanded = expandedLevels[lvl] !== false; // Default true
               return (
-                <div key={lvl} className="bg-black/20 rounded border border-[var(--color-blender-border)]">
+                <div key={lvl} className="bg-black/20 rounded-sm border border-[var(--color-blender-border)]">
                   <div
                     className="flex justify-between items-center p-2 cursor-pointer hover:bg-white/5 transition-colors"
                     onClick={() => setExpandedLevels(prev => ({ ...prev, [lvl]: !isExpanded }))}
@@ -2161,14 +2161,14 @@ export default function ParameterUI({
                         if (!url) return null;
 
                         return (
-                          <div key={tileName} className={`flex flex-col gap-1 p-1 bg-black/40 border ${customSlice ? 'border-yellow-500/50' : 'border-[var(--color-blender-border)]'} rounded relative group`}>
+                          <div key={tileName} className={`flex flex-col gap-1 p-1 bg-black/40 border ${customSlice ? 'border-yellow-500/50' : 'border-[var(--color-blender-border)]'} rounded-sm relative group`}>
                             <span className="text-[9px] text-gray-400 text-center truncate">{sliceName}</span>
-                            <img alt="image" src={url} className="w-full aspect-square object-contain bg-black/50 rounded" />
+                            <img alt="image" src={url} className="w-full aspect-square object-contain bg-black/50 rounded-sm" />
                             <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <a href={url} download={`${sliceName}.png`} className="p-1 bg-black/80 rounded text-emerald-400 hover:text-emerald-300" title="Download">
+                              <a href={url} download={`${sliceName}.png`} className="p-1 bg-black/80 rounded-sm text-emerald-400 hover:text-emerald-300" title="Download">
                                 <Download className="w-3 h-3" />
                               </a>
-                              <label className="p-1 bg-black/80 rounded text-yellow-400 hover:text-yellow-300 cursor-pointer" title="Upload Override">
+                              <label className="p-1 bg-black/80 rounded-sm text-yellow-400 hover:text-yellow-300 cursor-pointer" title="Upload Override">
                                 <Upload className="w-3 h-3" />
                                 <input
                                   type="file" accept="image/*" className="hidden"
@@ -2204,7 +2204,7 @@ export default function ParameterUI({
 
             {/* Foam Level Preview */}
             {parameters.oceanAddFoam && (
-              <div className="bg-black/20 rounded border border-[var(--color-blender-border)] mt-4">
+              <div className="bg-black/20 rounded-sm border border-[var(--color-blender-border)] mt-4">
                 <div
                   className="flex justify-between items-center p-2 cursor-pointer hover:bg-white/5 transition-colors"
                   onClick={() => setExpandedLevels(prev => ({ ...prev, 0: !(prev[0] !== false) }))}
@@ -2227,11 +2227,11 @@ export default function ParameterUI({
                       if (!url) return null;
 
                       return (
-                        <div key={tileName} className="flex flex-col gap-1 p-1 bg-black/40 border border-[var(--color-blender-border)] rounded relative group">
+                        <div key={tileName} className="flex flex-col gap-1 p-1 bg-black/40 border border-[var(--color-blender-border)] rounded-sm relative group">
                           <span className="text-[9px] text-gray-400 text-center truncate">{tileName}</span>
-                          <img alt="image" src={url} className="w-full aspect-square object-contain bg-black/50 rounded" />
+                          <img alt="image" src={url} className="w-full aspect-square object-contain bg-black/50 rounded-sm" />
                           <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <a href={url} download={`${sliceName}.png`} className="p-1 bg-black/80 rounded text-emerald-400 hover:text-emerald-300" title="Download">
+                            <a href={url} download={`${sliceName}.png`} className="p-1 bg-black/80 rounded-sm text-emerald-400 hover:text-emerald-300" title="Download">
                               <Download className="w-3 h-3" />
                             </a>
                           </div>

@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-blender-bg: #282828;
-  --color-blender-panel: #3a3a3a;
-  --color-blender-accent: #4772b3;
+  --color-blender-bg: #181818;
+  --color-blender-panel: #222222;
+  --color-blender-accent: #f59e0b;
   --color-blender-text: #e6e6e6;
-  --color-blender-node-bg: #424242;
-  --color-blender-node-header: #303030;
-  --color-blender-border: #1d1d1d;
-  --color-blender-input: #1d1d1d;
-  --color-blender-hover: #5680c2;
+  --color-blender-node-bg: #2a2a2a;
+  --color-blender-node-header: #1a1a1a;
+  --color-blender-border: #333333;
+  --color-blender-input: #121212;
+  --color-blender-hover: #d97706;
 }
 
 :root {
@@ -25,23 +25,23 @@ body {
 
 /* React Flow Customizations for Blender Theme */
 .react-flow__node {
-  border-radius: 6px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   background-color: var(--color-blender-node-bg);
   color: var(--color-blender-text);
   border: 1px solid var(--color-blender-border);
 }
 
 .react-flow__node.selected {
-  outline: 5px solid #fbbf24 !important;
-  box-shadow: 0 0 25px rgba(251, 191, 36, 0.6) !important;
+  outline: 2px solid var(--color-blender-accent) !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
   border-color: transparent !important;
 }
 
 .react-flow__node.node-intersecting-trash,
 .react-flow__node.node-intersecting-trash > div {
-  outline: 5px solid #ef4444 !important;
-  box-shadow: 0 0 25px rgba(239, 68, 68, 0.8) !important;
+  outline: 2px solid #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.6) !important;
   border-color: transparent !important;
 }
 

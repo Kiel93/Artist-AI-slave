@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Link2, Palette, Image as ImageIcon, Sparkles, ImageDown, PenTool, Box, Search, Scissors, Eraser, LogIn, LogOut, Layers, Trash2 } from "lucide-react";
+import { MessageSquare, Link2, Palette, Image as ImageIcon, Sparkles, ImageDown, PenTool, Box, Search, Scissors, Eraser, LogIn, LogOut, Layers, Trash2, Download, Upload } from "lucide-react";
 
 const NODE_TYPES = [
   {
@@ -148,6 +148,42 @@ export default function Sidebar() {
     localStorage.setItem("artist-assistant-custom-nodes", JSON.stringify(updated));
   };
 
+  const importCustomNodes = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importedNodes = JSON.parse(content);
+        if (Array.isArray(importedNodes)) {
+          const newCustomNodes = [...customNodes, ...importedNodes];
+          
+          // Ensure unique IDs
+          const uniqueNodes = newCustomNodes.reduce((acc, current) => {
+            const exists = acc.find((item: any) => item.id === current.id);
+            if (!exists) {
+              return acc.concat([current]);
+            } else {
+              current.id = `lib-node-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+              return acc.concat([current]);
+            }
+          }, []);
+          
+          setCustomNodes(uniqueNodes);
+          localStorage.setItem("artist-assistant-custom-nodes", JSON.stringify(uniqueNodes));
+        } else {
+          alert("Invalid file format. Expected an array of nodes.");
+        }
+      } catch (err) {
+        alert("Failed to parse the file.");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; 
+  };
+
   const visibleNodes = NODE_TYPES.filter(n => !n.isCompoundExclusive || isCompoundContext);
 
   return (
@@ -157,13 +193,13 @@ export default function Sidebar() {
         
         <div className="flex mt-3 border-b border-gray-700">
           <button 
-            className={`flex-1 pb-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'core' ? 'border-purple-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+            className={`flex-1 pb-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'core' ? 'border-[var(--color-blender-accent)] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
             onClick={() => setActiveTab('core')}
           >
             Core Tools
           </button>
           <button 
-            className={`flex-1 pb-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'custom' ? 'border-purple-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+            className={`flex-1 pb-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'custom' ? 'border-[var(--color-blender-accent)] text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
             onClick={() => setActiveTab('custom')}
           >
             Custom
@@ -175,45 +211,54 @@ export default function Sidebar() {
         {activeTab === 'core' && visibleNodes.map((node) => (
           <div
             key={node.type}
-            className="group flex flex-col p-3 bg-[var(--color-blender-node-bg)] border border-[var(--color-blender-border)] rounded-lg cursor-grab hover:border-[var(--color-blender-accent)] hover:shadow-md transition-all duration-200"
+            className="group flex flex-col p-3 bg-[var(--color-blender-node-bg)] border border-[var(--color-blender-border)] rounded-sm cursor-grab hover:border-[var(--color-blender-accent)] hover:shadow-sm transition-all duration-200"
             onDragStart={(event) => onDragStart(event, node.type)}
             draggable
           >
             <div className="flex items-center gap-3 mb-1">
-              <div className="p-1.5 bg-black/20 rounded-md group-hover:bg-black/40 transition-colors">
+              <div className="p-1.5 bg-black/20 rounded-sm group-hover:bg-black/40 transition-colors border border-transparent group-hover:border-[var(--color-blender-border)]">
                 {node.icon}
               </div>
               <span className="font-medium text-gray-200">{node.label}</span>
             </div>
-            <p className="text-xs text-gray-500 pl-[42px] leading-tight">
+            <p className="text-[10px] font-mono text-gray-500 pl-[42px] leading-tight uppercase tracking-wide">
               {node.description}
             </p>
           </div>
         ))}
 
         {activeTab === 'custom' && (
+          <div className="mb-3">
+            <label className="flex items-center justify-center gap-1.5 bg-[var(--color-blender-node-bg)] hover:bg-[var(--color-blender-hover)] text-gray-300 py-1.5 rounded-sm text-xs font-mono uppercase tracking-wide border border-[var(--color-blender-border)] transition-colors cursor-pointer w-full">
+              <Upload className="w-3.5 h-3.5" /> Import Nodes
+              <input type="file" accept=".json" className="hidden" onChange={importCustomNodes} />
+            </label>
+          </div>
+        )}
+
+        {activeTab === 'custom' && (
           customNodes.length > 0 ? (
             customNodes.map((node) => (
               <div
                 key={node.id}
-                className="group flex flex-col p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg cursor-grab hover:border-purple-500 hover:shadow-md transition-all duration-200 relative"
+                className="group flex flex-col p-3 bg-black/20 border border-[var(--color-blender-border)] rounded-sm cursor-grab hover:border-[var(--color-blender-accent)] hover:shadow-sm transition-all duration-200 relative"
                 onDragStart={(event) => onDragStart(event, 'compound', true, node.data)}
                 draggable
               >
                 <button 
                   onClick={(e) => deleteCustomNode(node.id, e)}
-                  className="absolute top-2 right-2 p-1 bg-black/40 hover:bg-red-500/80 text-gray-400 hover:text-white rounded transition-colors opacity-0 group-hover:opacity-100"
+                  className="absolute top-2 right-2 p-1 bg-black/40 hover:bg-red-500/80 text-gray-400 hover:text-white rounded-sm transition-colors opacity-0 group-hover:opacity-100 border border-[var(--color-blender-border)]"
                   title="Delete from library"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
                 <div className="flex items-center gap-3 mb-1">
-                  <div className="p-1.5 bg-purple-500/20 rounded-md group-hover:bg-purple-500/40 transition-colors">
-                    <Layers className="w-5 h-5 text-purple-400" />
+                  <div className="p-1.5 bg-black/30 rounded-sm group-hover:bg-black/50 transition-colors border border-transparent group-hover:border-[var(--color-blender-border)]">
+                    <Layers className="w-5 h-5 text-[var(--color-blender-accent)]" />
                   </div>
                   <span className="font-medium text-gray-200 pr-6">{node.data.label || 'Custom Node'}</span>
                 </div>
-                <p className="text-xs text-purple-300/60 pl-[42px] leading-tight">
+                <p className="text-[10px] font-mono text-gray-500 pl-[42px] leading-tight uppercase tracking-wide">
                   {node.data.internalNodes?.length || 0} internal nodes
                 </p>
               </div>
