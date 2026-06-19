@@ -113,7 +113,7 @@ export default function AssetManager({
           name: s.name.startsWith('Ground_') ? s.name : `Ground_${s.name}`
         }));
       } else {
-        const imageUrl = node.data.outputImage || node.data.resultUrl || node.data.imageUrl;
+        const imageUrl = node.data.image;
         if (!imageUrl) throw new Error("No image found in this node.");
         slices = [{ name: 'Flat_Floor', url: imageUrl }];
       }
@@ -145,7 +145,7 @@ export default function AssetManager({
     setIsLoading(true);
     setError(null);
     try {
-      const imageUrl = node.data.outputImage || node.data.resultUrl || node.data.imageUrl;
+      const imageUrl = node.data.image;
       if (!imageUrl) throw new Error("This node has no generated image yet.");
       
       if (replaceAssetId && replaceAssetId.startsWith('ground_variation_')) {
@@ -274,25 +274,6 @@ export default function AssetManager({
                     <div className="text-[10px] text-gray-500">{groundAsset.slices.length} Tiles</div>
                   </div>
                 </button>
-                {/* Ground Variation Sub-item */}
-                {groundAsset.slices.some(s => s.name === 'Ground_CenterFill' || s.name === 'CenterFill') && (
-                  <div className="mt-1 pl-4 border-l border-gray-700 ml-2">
-                    <button 
-                      onClick={() => setActiveSelection({ type: 'ground_variation' })}
-                      className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center gap-3 ${
-                        activeSelection.type === 'ground_variation' ? 'border-amber-500/60 bg-amber-900/20' : 'border-transparent hover:border-amber-500/30'
-                      }`}
-                    >
-                      <div className="w-8 h-8 bg-black/50 rounded-sm flex items-center justify-center shrink-0 border border-amber-500/20 overflow-hidden text-amber-500">
-                        <Settings className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium text-amber-100 truncate">Surface Appearance</div>
-                        <div className="text-[10px] text-gray-500">Decals & Variations</div>
-                      </div>
-                    </button>
-                  </div>
-                )}
               </div>
             ) : (
               <button 
@@ -423,8 +404,8 @@ export default function AssetManager({
                     
                     if (importType === 'ground' || importType === 'ocean') {
                       const flattenedNodes = task.nodes.flatMap(n => {
-                        if (n.data?.outputImages && Object.keys(n.data.outputImages).length > 0) {
-                          return Object.entries(n.data.outputImages).map(([pinId, url]) => {
+                        if (n.data?.outputImages && Object.keys(n.data.images).length > 0) {
+                          return Object.entries(n.data.images).map(([pinId, url]) => {
                             const pinInfo = n.data.outputPins?.find((p: any) => p.id === pinId);
                             const label = pinInfo ? pinInfo.label : pinId;
                             return {
@@ -432,7 +413,7 @@ export default function AssetManager({
                               id: `${n.id}-${pinId}`,
                               data: {
                                 ...n.data,
-                                outputImage: url,
+                                image: url,
                                 localPrompt: label
                               }
                             };
@@ -443,7 +424,7 @@ export default function AssetManager({
                       
                       const validNodes = importType === 'ground'
                         ? flattenedNodes.filter(n => n.type === 'isometricHexSlicer' && n.data?.slices?.some((s: any) => s.name === 'Ground_CenterFill' || s.name === 'CenterFill'))
-                        : flattenedNodes.filter(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
+                        : flattenedNodes.filter(n => n.data && (n.data.image));
                         
                       if (validNodes.length === 0) return null;
                       
@@ -454,7 +435,7 @@ export default function AssetManager({
                           <div className="text-xs text-gray-400 mb-2 px-1">{task.name}</div>
                           <div className="grid grid-cols-4 gap-2">
                             {validNodes.map(node => {
-                               let imageUrl = node.data.outputImage || node.data.resultUrl || node.data.imageUrl;
+                               let imageUrl = node.data.image;
                                if (importType === 'ground' && node.data.slices) {
                                  const centerFillSlice = node.data.slices.find((s: any) => s.name === 'Ground_CenterFill' || s.name === 'CenterFill');
                                  if (centerFillSlice) {
@@ -488,8 +469,8 @@ export default function AssetManager({
                       );
                     } else {
                       const objectNodes = task.nodes.flatMap(n => {
-                        if (n.data?.outputImages && Object.keys(n.data.outputImages).length > 0) {
-                          return Object.entries(n.data.outputImages).map(([pinId, url]) => {
+                        if (n.data?.outputImages && Object.keys(n.data.images).length > 0) {
+                          return Object.entries(n.data.images).map(([pinId, url]) => {
                             const pinInfo = n.data.outputPins?.find((p: any) => p.id === pinId);
                             const label = pinInfo ? pinInfo.label : pinId;
                             return {
@@ -497,14 +478,14 @@ export default function AssetManager({
                               id: `${n.id}-${pinId}`,
                               data: {
                                 ...n.data,
-                                outputImage: url,
+                                image: url,
                                 localPrompt: label
                               }
                             };
                           });
                         }
                         return [n];
-                      }).filter(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
+                      }).filter(n => n.data && (n.data.image));
                       
                       if (objectNodes.length === 0) return null;
                       
@@ -513,7 +494,7 @@ export default function AssetManager({
                           <div className="text-xs text-gray-400 mb-2 px-1">{task.name}</div>
                           <div className="grid grid-cols-4 gap-2">
                             {objectNodes.map(node => {
-                              const imageUrl = node.data.outputImage || node.data.resultUrl || node.data.imageUrl;
+                              const imageUrl = node.data.image;
                               const isAlreadyImported = objectAssets.some(a => a.nodeId === node.id);
                               return (
                                 <button

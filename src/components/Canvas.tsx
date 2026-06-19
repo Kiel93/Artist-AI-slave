@@ -72,7 +72,7 @@ const initialNodes: Node[] = [
     data: {
       label: "My Auto Pipeline",
       internalNodes: [
-        { id: "p1", type: "prompt", position: { x: 100, y: 100 }, data: { outputText: "A futuristic cyberpunk city" } },
+        { id: "p1", type: "prompt", position: { x: 100, y: 100 }, data: { text: "A futuristic cyberpunk city" } },
         { id: "r1", type: "geminiRefiner", position: { x: 400, y: 100 }, data: { model: "gemini-2.5-flash" } },
         { id: "g1", type: "generalImageGeneration", position: { x: 700, y: 100 }, data: { model: "nano-banana-pro" } }
       ],
@@ -398,7 +398,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     // Find the compound node we are currently inside
     const targetId = graphPath[graphPath.length - 1].id;
     
-    let currentNode: Node | null = null;
+    let currentNode: any = null;
     
     const findNodeDeep = (nodesArray: Node[]) => {
       for (const n of nodesArray) {
@@ -444,7 +444,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     
     const { rootNodes } = getFullRootGraph();
     const targetId = graphPath[graphPath.length - 1].id;
-    let currentNode: Node | null = null;
+    let currentNode: any = null;
     
     const findNodeDeep = (nodesArray: Node[]) => {
       for (const n of nodesArray) {
@@ -847,7 +847,7 @@ export default function Canvas({ taskId }: CanvasProps) {
               </button>
               
               {graphPath.map((pathItem, index) => (
-                <div key={pathItem.id} className="flex items-center gap-2">
+                <div key={`${pathItem.id}-${index}`} className="flex items-center gap-2">
                   <span className="text-gray-500">/</span>
                   <button 
                     onClick={() => navigateToLevel(index)}

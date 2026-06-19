@@ -15,7 +15,7 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
   const processImage = async () => {
     if (incomingEdges.length === 0) return setSlices([]);
     const sourceNode = getNodes().find(n => n.id === incomingEdges[0].source);
-    const imageUrl = sourceNode?.data?.outputImage || sourceNode?.data?.resultUrl || sourceNode?.data?.imageUrl;
+    const imageUrl = sourceNode?.data?.image || sourceNode?.data?.resultUrl || sourceNode?.data?.imageUrl;
     if (!imageUrl) return;
 
     setIsProcessing(true);
@@ -334,17 +334,19 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
             <div className="grid grid-cols-4 gap-2 w-full max-h-96 overflow-y-auto pr-1 custom-scrollbar">
               {slices.map((slice, idx) => (
                 <div key={idx} className="flex flex-col items-center gap-1 group">
-                  <a
-                    href={slice.url}
-                    download={`Tile_${slice.name}.png`}
-                    className="aspect-square w-full border border-emerald-500/30 rounded overflow-hidden bg-black/50 hover:border-emerald-400 hover:scale-105 transition-all cursor-pointer relative block"
-                    title={`Download ${slice.name}`}
-                  >
+                  <div className="aspect-square w-full border border-emerald-500/30 rounded overflow-hidden bg-black/50 relative block group/tile">
                     <img src={slice.url} className="w-full h-full object-contain" alt={slice.name} />
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Download className="w-4 h-4 text-emerald-400" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/tile:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                      <a
+                        href={slice.url}
+                        download={`Tile_${slice.name}.png`}
+                        className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-2 shadow-xl transition-transform hover:scale-105 pointer-events-auto"
+                        title={`Download ${slice.name}`}
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
                     </div>
-                  </a>
+                  </div>
                   <span className="text-[8px] text-emerald-200/60 truncate w-full text-center">{slice.name}</span>
                 </div>
               ))}

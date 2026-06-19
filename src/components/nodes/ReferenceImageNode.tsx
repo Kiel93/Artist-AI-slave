@@ -3,7 +3,7 @@ import { Handle, Position, useReactFlow } from "reactflow";
 import { Image as ImageIcon, UploadCloud, X } from "lucide-react";
 
 export default function ReferenceImageNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
-  const [imagePreview, setImagePreview] = useState<string | null>(data.outputImage || data.imageUrl || null);
+  const [imagePreview, setImagePreview] = useState<string | null>(data.image || data.imageUrl || null);
   const { setNodes } = useReactFlow();
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -15,7 +15,7 @@ export default function ReferenceImageNode({ id, data, selected }: { id: string;
         setImagePreview(url);
         setNodes((nds) =>
           nds.map((node) =>
-            node.id === id ? { ...node, data: { ...node.data, outputImage: url } } : node
+            node.id === id ? { ...node, data: { ...node.data, image: url } } : node
           )
         );
       };
@@ -27,7 +27,7 @@ export default function ReferenceImageNode({ id, data, selected }: { id: string;
     setImagePreview(null);
     setNodes((nds) =>
       nds.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, outputImage: null } } : node
+        node.id === id ? { ...node, data: { ...node.data, image: null } } : node
       )
     );
   };

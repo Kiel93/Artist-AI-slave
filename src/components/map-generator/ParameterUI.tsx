@@ -36,6 +36,78 @@ interface ShadowResult {
   height: number;
 }
 
+function EditableSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  formatValue = (v: number) => v.toString(),
+  parseValue = (s: string) => parseFloat(s)
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (val: number) => void;
+  formatValue?: (v: number) => string;
+  parseValue?: (s: string) => number;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(formatValue(value));
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-gray-400 whitespace-nowrap w-16">{label}</span>
+      <input
+        type="range" min={min} max={max} step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
+      />
+      {isEditing ? (
+        <input
+          type="text"
+          value={tempValue}
+          onChange={(e) => setTempValue(e.target.value)}
+          onBlur={() => {
+            setIsEditing(false);
+            const parsed = parseValue(tempValue);
+            if (!isNaN(parsed)) {
+              onChange(Math.max(min, Math.min(max, parsed)));
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              setIsEditing(false);
+              const parsed = parseValue(tempValue);
+              if (!isNaN(parsed)) {
+                onChange(Math.max(min, Math.min(max, parsed)));
+              }
+            } else if (e.key === 'Escape') {
+              setIsEditing(false);
+            }
+          }}
+          autoFocus
+          className="w-8 bg-black/40 text-gray-200 rounded-sm border border-amber-500/50 text-[10px] text-right focus:outline-none"
+        />
+      ) : (
+        <span
+          className="text-[10px] text-gray-300 w-8 text-right cursor-text hover:text-white"
+          onClick={() => {
+            setTempValue(formatValue(value));
+            setIsEditing(true);
+          }}
+        >
+          {formatValue(value)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 const bakeTransformToDataUrl = async (sourceUrl: string, scale: number): Promise<string> => {
   if (!sourceUrl || scale === 1) return sourceUrl;
 
@@ -1541,8 +1613,8 @@ export default function ParameterUI({
                           const vTask = await getTask(v.taskId);
                           if (vTask && vTask.nodes) {
                             const vNode = vTask.nodes.find(n => n.id === v.nodeId);
-                            if (vNode && (vNode.data.outputImage || vNode.data.resultUrl || vNode.data.imageUrl)) {
-                              const rawUrl = vNode.data.outputImage || vNode.data.resultUrl || vNode.data.imageUrl;
+                            if (vNode && (vNode.data.image)) {
+                              const rawUrl = vNode.data.image;
                               newSlices[i].variations![j] = {
                                 ...v,
                                 url: rawUrl
@@ -1585,18 +1657,22 @@ export default function ParameterUI({
         </button>
         {openGroundSection === 'tiles' && renderTilesetSlots(groundAsset, setGroundAsset as any, 'ground')}
       </div>
+      <div className="border-b border-[var(--color-blender-border)] pb-2">
+        <button onClick={() => setOpenGroundSection(s => s === 'variations' ? null : 'variations')} className="w-full flex items-center justify-between py-2 text-amber-400 hover:text-amber-300">
+          <span className="text-sm font-semibold uppercase tracking-wider">Surface Appearance</span>
+          <ChevronDown className={`w-4 h-4 transition-transform ${openGroundSection === 'variations' ? 'rotate-180' : ''}`} />
+        </button>
+        {openGroundSection === 'variations' && renderGroundVariationInner()}
+      </div>
     </div>
   );
 
-  const renderGroundVariation = () => {
+  const renderGroundVariationInner = () => {
     const centerSliceIdx = groundAsset?.slices?.findIndex(s => s.name === 'Ground_CenterFill');
     const slice = (centerSliceIdx !== undefined && centerSliceIdx !== -1) ? groundAsset!.slices[centerSliceIdx] : null;
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-[var(--color-blender-border)] pb-2">
-          <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Ground Variation</h3>
-        </div>
+      <div className="space-y-4 pt-2">
 
         {/* Segment 1: Tile Variation */}
         <div className="border-b border-[var(--color-blender-border)] pb-2">
@@ -1687,20 +1763,6 @@ export default function ParameterUI({
                         >
                           <Download className="w-3 h-3" />
                         </button>
-                        <span className="text-[10px] text-gray-400">Factor</span>
-                        <input
-                          type="number" min="0" max="1" step="0.01"
-                          value={v.factor}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            const newSlices = [...groundAsset!.slices];
-                            const newVars = [...newSlices[centerSliceIdx!].variations!];
-                            newVars[vIdx] = { ...newVars[vIdx], factor: isNaN(val) ? 0 : val };
-                            newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
-                            setGroundAsset!({ ...groundAsset!, slices: newSlices });
-                          }}
-                          className="w-16 bg-black/40 text-gray-200 p-1 rounded-sm border border-gray-700 text-xs text-right"
-                        />
                       </div>
                       <button
                         onClick={() => {
@@ -1714,40 +1776,50 @@ export default function ParameterUI({
                       </button>
                     </div>
                     <div className="flex flex-col gap-2 pt-2 border-t border-amber-900/20 mt-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 w-16">Opacity</span>
-                        <input
-                          type="range" min="0" max="1" step="0.01"
-                          value={v.opacity ?? 1}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            const newSlices = [...groundAsset!.slices];
-                            const newVars = [...newSlices[centerSliceIdx!].variations!];
-                            newVars[vIdx] = { ...newVars[vIdx], opacity: isNaN(val) ? 1 : Math.max(0, Math.min(1, val)) };
-                            newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
-                            setGroundAsset!({ ...groundAsset!, slices: newSlices });
-                          }}
-                          className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
-                        />
-                        <span className="text-[10px] text-gray-300 w-6 text-right">{(v.opacity ?? 1).toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap w-16">Smoothing</span>
-                        <input
-                          type="range" min="0" max="100"
-                          value={v.seamSmoothing ?? 0}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            const newSlices = [...groundAsset!.slices];
-                            const newVars = [...newSlices[centerSliceIdx!].variations!];
-                            newVars[vIdx] = { ...newVars[vIdx], seamSmoothing: isNaN(val) ? 0 : val };
-                            newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
-                            setGroundAsset!({ ...groundAsset!, slices: newSlices });
-                          }}
-                          className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
-                        />
-                        <span className="text-[10px] text-gray-300 w-6 text-right">{v.seamSmoothing ?? 0}</span>
-                      </div>
+                      <EditableSlider
+                        label="Factor"
+                        value={v.factor ?? 0.1}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(val) => {
+                          const newSlices = [...groundAsset!.slices];
+                          const newVars = [...newSlices[centerSliceIdx!].variations!];
+                          newVars[vIdx] = { ...newVars[vIdx], factor: val };
+                          newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
+                          setGroundAsset!({ ...groundAsset!, slices: newSlices });
+                        }}
+                        formatValue={(val) => val.toFixed(2)}
+                      />
+                      <EditableSlider
+                        label="Transparency"
+                        value={1 - (v.opacity ?? 1)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(val) => {
+                          const newSlices = [...groundAsset!.slices];
+                          const newVars = [...newSlices[centerSliceIdx!].variations!];
+                          newVars[vIdx] = { ...newVars[vIdx], opacity: 1 - val };
+                          newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
+                          setGroundAsset!({ ...groundAsset!, slices: newSlices });
+                        }}
+                        formatValue={(val) => val.toFixed(2)}
+                      />
+                      <EditableSlider
+                        label="Smoothing"
+                        value={v.seamSmoothing ?? 0}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onChange={(val) => {
+                          const newSlices = [...groundAsset!.slices];
+                          const newVars = [...newSlices[centerSliceIdx!].variations!];
+                          newVars[vIdx] = { ...newVars[vIdx], seamSmoothing: val };
+                          newSlices[centerSliceIdx!] = { ...newSlices[centerSliceIdx!], variations: newVars };
+                          setGroundAsset!({ ...groundAsset!, slices: newSlices });
+                        }}
+                      />
                     </div>
                   </div>
                 );
@@ -1770,7 +1842,7 @@ export default function ParameterUI({
                           const newSlices = [...groundAsset!.slices];
                           if (!newSlices[centerSliceIdx!].variations) newSlices[centerSliceIdx!].variations = [];
                           const rawUrl = event.target.result as string;
-                          newSlices[centerSliceIdx!].variations!.push({ url: rawUrl, factor: 0, opacity: 1, seamSmoothing: 0 });
+                          newSlices[centerSliceIdx!].variations!.push({ url: rawUrl, factor: 0.1, opacity: 1, seamSmoothing: 0 });
                           setGroundAsset!({ ...groundAsset!, slices: newSlices });
                         }
                       };
@@ -1911,10 +1983,10 @@ export default function ParameterUI({
                 if (oceanAsset.nodeId) {
                   targetNode = task.nodes.find(n => n.id === oceanAsset.nodeId);
                 } else {
-                  targetNode = task.nodes.find(n => n.data && (n.data.outputImage || n.data.resultUrl || n.data.imageUrl));
+                  targetNode = task.nodes.find(n => n.data && (n.data.image));
                 }
                 if (targetNode) {
-                  const imageUrl = targetNode.data.outputImage || targetNode.data.resultUrl || targetNode.data.imageUrl;
+                  const imageUrl = targetNode.data.image;
                   if (imageUrl) {
                     setOceanAsset({ ...oceanAsset, slices: [{ name: 'Flat_Floor', url: imageUrl }] });
                   }
@@ -2269,7 +2341,6 @@ export default function ParameterUI({
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           {activeSelection.type === 'map' && <><Sliders className="w-5 h-5 text-blue-400" /> Map Settings</>}
           {activeSelection.type === 'ground' && <><Settings className="w-5 h-5 text-emerald-400" /> Ground Settings</>}
-          {activeSelection.type === 'ground_variation' && <><Settings className="w-5 h-5 text-amber-400" /> Surface Appearance</>}
           {activeSelection.type === 'ocean' && <><Settings className="w-5 h-5 text-blue-400" /> Ocean Settings</>}
           {activeSelection.type === 'object' && <><Box className="w-5 h-5 text-indigo-400" /> Object Inspect</>}
         </h2>
@@ -2278,7 +2349,6 @@ export default function ParameterUI({
       <div className="flex-1 overflow-y-auto p-5">
         {activeSelection.type === 'map' && renderMapSettings()}
         {activeSelection.type === 'ground' && renderGroundSettings()}
-        {activeSelection.type === 'ground_variation' && renderGroundVariation()}
         {activeSelection.type === 'ocean' && renderOceanSettings()}
         {activeSelection.type === 'object' && renderObjectSettings(activeSelection.id)}
       </div>

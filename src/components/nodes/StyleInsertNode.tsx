@@ -8,7 +8,7 @@ import { generateTextUniversal } from "@/lib/llm-router";
 export default function StyleInsertNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [images, setImages] = useState<string[]>(data.images || []);
   const [isBaking, setIsBaking] = useState(false);
-  const [outputText, setOutputText] = useState<string>(data.outputText || data.bakedStyle || "");
+  const [text, setText] = useState<string>(data.text || "");
   const [generatedPrompt, setGeneratedPrompt] = useState<string>(data.generatedPrompt || "");
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isPromptCollapsed, setIsPromptCollapsed] = useState(true);
@@ -66,10 +66,10 @@ export default function StyleInsertNode({ id, data, selected }: { id: string; da
 
       const response = await generateTextUniversal(prompt, images, selectedModel);
       if (response.success && response.text) {
-        setOutputText(response.text);
+        setText(response.text);
         setNodes((nds) =>
           nds.map((node) =>
-            node.id === id ? { ...node, data: { ...node.data, outputText: response.text } } : node
+            node.id === id ? { ...node, data: { ...node.data, text: response.text } } : node
           )
         );
       } else {
@@ -94,7 +94,7 @@ export default function StyleInsertNode({ id, data, selected }: { id: string; da
           <Palette className="w-4 h-4 text-emerald-400" />
           <span className="font-bold text-xs text-emerald-100 uppercase tracking-wider">Style Insert</span>
         </div>
-        {outputText && <Sparkles className="w-3 h-3 text-yellow-400 animate-pulse" />}
+        {text && <Sparkles className="w-3 h-3 text-yellow-400 animate-pulse" />}
       </div>
 
       <div className="p-4 space-y-3">
@@ -153,13 +153,13 @@ export default function StyleInsertNode({ id, data, selected }: { id: string; da
 
 
 
-        {outputText ? (
+        {text ? (
           <div className="relative group">
             <div className={`bg-black/40 border border-emerald-500/20 p-2 rounded text-[10px] text-emerald-100/70 italic whitespace-pre-wrap ${isCollapsed ? "max-h-24 overflow-hidden" : ""}`}>
               <div className="text-emerald-400 font-bold mb-1">Style Signature:</div>
-              {outputText}
+              {text}
             </div>
-            {outputText.length > 80 && (
+            {text.length > 80 && (
               <button 
                 onClick={() => setIsCollapsed(!isCollapsed)}
                 className="absolute top-1 right-1 text-emerald-400 hover:text-emerald-300 transition-colors bg-[#1a1525]/80 p-0.5 rounded shadow-sm"

@@ -17,7 +17,7 @@ const MODELS = [
 
 export default function TilesetGeneratorNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "succeeded" | "failed">("idle");
-  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
+  const [image, setImage] = useState<string | null>(data.image || null);
   const [error, setError] = useState<string | null>(null);
   const [lastRunHash, setLastRunHash] = useState<string>(data.lastRunHash || "");
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
@@ -51,14 +51,14 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
       if (!sourceNode) return;
       if (edge.targetHandle === 'text') {
         hasTextConnectionGen = true;
-        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        const text = sourceNode.data.text|| "";
         if (text) promptParts.push(text);
       }
       if (edge.targetHandle === 'style') {
-        styleInput = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        styleInput = sourceNode.data.text|| "";
       }
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        inputImageUrl = sourceNode.data.image|| "";
       }
     });
 
@@ -104,7 +104,7 @@ View: Strict 30-degree isometric.`;
 
     const currentHash = JSON.stringify({ prompt: apiPrompt, model: selectedModel });
 
-    if (status === 'succeeded' && currentHash === lastRunHash && outputImage) {
+    if (status === 'succeeded' && currentHash === lastRunHash && image) {
       console.log("No changes detected, skipping API call.");
       return;
     }
@@ -199,11 +199,11 @@ View: Strict 30-degree isometric.`;
         
         if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
           const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
-          setOutputImage(finalUrl);
+          setImage(finalUrl);
           setStatus("succeeded");
           setNodes(nds => nds.map(n => n.id === id ? { 
             ...n, 
-            data: { ...n.data, outputImage: finalUrl, lastRunHash: currentHash, localPrompt } 
+            data: { ...n.data, image: finalUrl, lastRunHash: currentHash, localPrompt } 
           } : n));
           return true;
         } else if (res.status === 'failed' || (res.status as string) === 'error') {
@@ -303,9 +303,22 @@ View: Strict 30-degree isometric.`;
         </div>
 
         {/* Image Preview */}
-        <div className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative">
-          {outputImage ? (
-            <img src={outputImage} className="w-full h-full object-contain" alt="generated tileset" />
+        <div className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group">
+          {image ? (
+            <>
+              <img src={image} className="w-full h-full object-contain" alt="generated tileset" />
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                <a
+                  href={image}
+                  download={`tileset-${id}.png`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-3 shadow-xl transition-transform hover:scale-105 pointer-events-auto"
+                >
+                  <Download className="w-6 h-6" />
+                </a>
+              </div>
+            </>
           ) : (
             <>
               {(status === 'queueing' || status === 'polling') ? (
@@ -344,7 +357,7 @@ View: Strict 30-degree isometric.`;
           <button 
             onClick={generateImage}
             disabled={status === 'queueing' || status === 'polling'}
-            className="nodrag flex-[2] py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
           >
             <Play className="w-4 h-4 fill-current" />
             GENERATE

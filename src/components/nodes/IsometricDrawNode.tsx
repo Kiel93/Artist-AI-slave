@@ -8,12 +8,12 @@ export default function IsometricDrawNode({ id, data, selected }: { id: string; 
   const { setNodes } = useReactFlow();
 
   useEffect(() => {
-    if (data.outputText !== ISO_PROMPT) {
+    if (data.text !== ISO_PROMPT) {
       setNodes((nds) =>
-        nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, outputText: ISO_PROMPT } } : n))
+        nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, text: ISO_PROMPT } } : n))
       );
     }
-  }, [id, data.outputText, setNodes]);
+  }, [id, data.text, setNodes]);
 
   return (
     <div className={`w-64 bg-[#1a1525] rounded-lg shadow-2xl transition-all duration-200 relative ${

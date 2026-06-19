@@ -48,7 +48,7 @@ Consistency in color helps users identify data types at a glance:
 To ensure all nodes feel like they belong to a cohesive application, adhere to the following Tailwind/CSS structural rules for internal UI elements:
 
 *   **Buttons**: Should be chunky and tactile. Use `py-2 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 transition-all`. The background color must match the node's semantic color (e.g., `bg-emerald-600 hover:bg-emerald-500` for Image nodes).
-*   **Text Inputs / Textareas**: Should sit recessed within the node. Use `bg-black/40 text-gray-200 p-2 rounded border border-[semantic-color]/20 focus:border-[semantic-color]/60 focus:outline-none`.
+*   **Text Inputs / Textareas**: Should sit recessed within the node. Use `bg-black/40 text-gray-200 p-2 rounded border border-[semantic-color]/20 focus:border-[semantic-color]/60 focus:outline-none`. **DO NOT use legacy CSS variables** like `var(--color-blender-input)`.
 *   **Sliders (Range Inputs)**: Use `w-full accent-[semantic-color]-500` for native HTML range inputs to match the node's theme.
 *   **Icons**: Always use `lucide-react` icons. Give them a standardized size (e.g., `w-5 h-5` for headers, `w-4 h-4` for inline buttons) and tint them with the node's semantic color (e.g., `text-emerald-400`).
 *   **Handle Sizing & Position**: ReactFlow handles should be prominent but clean. Override default classes with `!w-4 !h-4 !border-none`. Because most node contents are wrapped in padded containers (e.g. `p-3` or `p-4`), you MUST use offset classes like `!left-[-24px]` and `!right-[-10px]` to push the handles out so they perfectly align with the outer stroke of the node, overriding React Flow's native inner-padding snap.
@@ -98,3 +98,14 @@ To support the Compound Node (Nested Sub-Graphs) architecture, node execution lo
 *   **Logic Extraction**: All API calls, data transformations, and core logic for a node MUST reside in `src/lib/node-executor.ts` as a pure, standalone, asynchronous function (e.g. `executeGeminiRefinerNode`).
 *   **React Integration**: The actual React component (e.g. `GeminiRefinerNode.tsx`) should simply gather inputs, call the executor from `node-executor.ts`, and then update its UI and `data` state with the returned results.
 *   **Compound Nodes**: A `CompoundNode` acts as an automated pipeline. It traverses its `internalNodes` and `internalEdges`, using `executeNode` from `node-executor.ts` to process data from start to finish without needing to render the internal nodes to the canvas. This requires nodes to be able to execute purely based on their configuration `data` and explicit inputs.
+
+## 9. Rules for Download Buttons
+If a node outputs image(s) and provides an image preview, the download button MUST be placed over the image itself.
+It should appear centered over the result image when the user hovers over it, using a semi-transparent dark overlay.
+Do NOT place download buttons in the corners of result images or as tiny icons next to the output pins. Do NOT place download buttons in the bottom action bar.
+
+**Implementation Details:**
+1. The image preview container MUST have the `group` class and `relative` positioning.
+2. Inside the container, add the overlay: `<div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">`
+3. Inside the overlay, add the button (must have `pointer-events-auto`): `<button className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-3 shadow-xl transition-transform hover:scale-105">`
+4. Use the `Download` icon from `lucide-react` (size `w-6 h-6`).

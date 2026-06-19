@@ -8,7 +8,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
   const [feather, setFeather] = useState(data.feather ?? 2);
   const [pan, setPan] = useState(data.pan ?? { x: 0, y: 0 });
 
-  const [cutImage, setCutImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
+  const [cutImage, setCutImage] = useState<string | null>(data.image || null);
   const [isExpanded, setIsExpanded] = useState(data.isExpanded !== undefined ? data.isExpanded : true);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -19,8 +19,12 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
   const allEdges = useEdges();
   const incomingEdges = allEdges.filter(e => e.target === id && e.targetHandle === 'image');
 
-  const sourceNode = incomingEdges.length > 0 ? getNodes().find(n => n.id === incomingEdges[0].source) : null;
-  const imageUrl = sourceNode?.data?.outputImage || sourceNode?.data?.resultUrl || sourceNode?.data?.imageUrl;
+  const edge = incomingEdges.length > 0 ? incomingEdges[0] : null;
+  const sourceNode = edge ? getNodes().find(n => n.id === edge.source) : null;
+  let imageUrl = sourceNode?.data?.image || sourceNode?.data?.resultUrl || sourceNode?.data?.imageUrl;
+  if (sourceNode?.data?.images && edge?.sourceHandle) {
+    imageUrl = sourceNode.data.images[edge.sourceHandle] || imageUrl;
+  }
 
   const renderPreview = () => {
     const canvas = canvasRef.current;
@@ -114,7 +118,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
     e.preventDefault();
     setZoom((prev: number) => {
       const newZoom = prev - e.deltaY * 0.5;
-      return Math.min(Math.max(newZoom, 100), 500);
+      return Math.min(Math.max(newZoom, 100), 1000);
     });
   };
 
@@ -166,7 +170,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
       // Expose to output handle
       setNodes(nds => nds.map(n => n.id === id ? {
         ...n,
-        data: { ...n.data, outputImage: resultDataUrl }
+        data: { ...n.data, image: resultDataUrl }
       } : n));
     };
   };
@@ -202,7 +206,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
                 <span>Zoom</span>
                 <span>{Math.round(zoom)}%</span>
               </div>
-              <input type="range" min="100" max="500" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
+              <input type="range" min="100" max="1000" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
             </div>
 
             <div>
@@ -245,9 +249,20 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
           </div>
 
           {cutImage && (
-            <div className="bg-black border border-emerald-500/20 rounded-lg p-2">
+            <div className="bg-black border border-emerald-500/20 rounded-lg p-2 relative group">
               <div className="text-[10px] text-emerald-200/40 uppercase font-bold mb-2">Cut Result</div>
-              <img src={cutImage} alt="Cut Result" className="w-full" style={{ imageRendering: 'pixelated' }} />
+              <div className="relative overflow-hidden rounded">
+                <img src={cutImage} alt="Cut Result" className="w-full" style={{ imageRendering: 'pixelated' }} />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                  <a
+                    href={cutImage}
+                    download="Tile_Cut.png"
+                    className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-3 shadow-xl transition-transform hover:scale-105 pointer-events-auto"
+                  >
+                    <Download className="w-6 h-6" />
+                  </a>
+                </div>
+              </div>
             </div>
           )}
 
@@ -260,16 +275,6 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
               <Scissors className="w-4 h-4" />
               CUT
             </button>
-
-            {cutImage && (
-              <a
-                href={cutImage}
-                download="Tile_Cut.png"
-                className="px-4 py-2 bg-black/50 hover:bg-black/70 border border-emerald-500/30 text-emerald-400 text-sm font-bold rounded shadow-lg flex items-center justify-center transition-all"
-              >
-                <Download className="w-4 h-4" />
-              </a>
-            )}
           </div>
         </div>
       )}

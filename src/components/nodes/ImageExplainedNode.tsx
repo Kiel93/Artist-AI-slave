@@ -6,7 +6,7 @@ import { GOOGLE_MODELS } from "@/lib/gemini";
 
 export default function ImageExplainedNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [isExplaining, setIsExplaining] = useState(false);
-  const [outputText, setOutputText] = useState<string>(data.outputText || data.explainedText || "");
+  const [text, setText] = useState<string>(data.text || "");
   const [showRawRequest, setShowRawRequest] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>(data.model || "gemini-2.5-flash");
@@ -36,7 +36,7 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
       if (!sourceNode) return;
       
       if (edge.targetHandle === 'image') {
-        const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
+        const image = sourceNode.data.image || sourceNode.data.imageUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
         if (image) imageInputs.push(image);
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
           imageInputs.push(...sourceNode.data.images);
@@ -58,11 +58,11 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
         {}
       );
 
-      if (result.success && result.data?.outputText) {
-        setOutputText(result.data.outputText);
+      if (result.success && result.data?.text) {
+        setText(result.data.text);
         setNodes(nds => nds.map(n => n.id === id ? { 
           ...n, 
-          data: { ...n.data, outputText: result.data.outputText } 
+          data: { ...n.data, text: result.data.text } 
         } : n));
       } else {
         alert("Explanation failed: " + result.error);
@@ -158,9 +158,9 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
 
         <div className="relative group">
           <div className={`min-h-[80px] bg-black/40 border border-emerald-500/20 rounded p-2 text-xs text-emerald-100/70 italic whitespace-pre-wrap ${isCollapsed ? "max-h-32 overflow-hidden" : ""}`}>
-            {outputText || "Click Explain to analyze the images..."}
+            {text || "Click Explain to analyze the images..."}
           </div>
-          {outputText && outputText.length > 200 && (
+          {text && text.length > 200 && (
             <button 
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="absolute top-1 right-1 text-emerald-400 hover:text-emerald-300 transition-colors bg-[#1a1525]/80 p-0.5 rounded shadow-sm"

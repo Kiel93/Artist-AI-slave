@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Handle, Position, useReactFlow } from "reactflow";
-import { Eraser, Play, RefreshCw, AlertCircle, ImageIcon } from "lucide-react";
+import { Eraser, Play, RefreshCw, AlertCircle, ImageIcon, Download } from "lucide-react";
 import { removeBackground as imglyRemoveBackground } from "@imgly/background-removal";
 
 export default function BackgroundRemoverNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "processing" | "succeeded" | "failed">("idle");
-  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
+  const [image, setImage] = useState<string | null>(data.image || null);
   const [error, setError] = useState<string | null>(null);
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
@@ -22,7 +22,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        inputImageUrl = sourceNode.data.image|| "";
       }
     });
 
@@ -103,12 +103,12 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
         img.src = base64Url;
       });
 
-      setOutputImage(trimmedBase64);
+      setImage(trimmedBase64);
       setStatus("succeeded");
       
       setNodes(nds => nds.map(n => n.id === id ? { 
         ...n, 
-        data: { ...n.data, outputImage: trimmedBase64 } 
+        data: { ...n.data, image: trimmedBase64 } 
       } : n));
 
     } catch (err: any) {
@@ -150,14 +150,27 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
 
         {/* Image Preview with checkerboard pattern to show transparency */}
         <div 
-          className="w-full aspect-square border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative"
+          className="w-full aspect-square border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
           style={{
             backgroundImage: `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`,
             backgroundSize: '20px 20px'
           }}
         >
-          {outputImage ? (
-            <img src={outputImage} className="w-full h-full object-contain" alt="Background Removed" />
+          {image ? (
+            <>
+              <img src={image} className="w-full h-full object-contain" alt="Background Removed" />
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                <a
+                  href={image}
+                  download={`bg-removed-${id}.png`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-3 shadow-xl transition-transform hover:scale-105 pointer-events-auto"
+                >
+                  <Download className="w-6 h-6" />
+                </a>
+              </div>
+            </>
           ) : (
             <>
               {status === 'processing' ? (
@@ -180,25 +193,11 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
           <button 
             onClick={removeBackground}
             disabled={status === 'processing'}
-            className="nodrag flex-[2] py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
           >
             <Play className="w-4 h-4 fill-current" />
             PROCESS
           </button>
-          {outputImage && (
-            <button
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = outputImage;
-                a.download = `bg-removed-${id}.png`;
-                a.target = '_blank';
-                a.click();
-              }}
-              className="nodrag flex-1 py-2 bg-gray-700/80 hover:bg-gray-600 border border-gray-500/50 text-white text-[10px] font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-1"
-            >
-              DOWNLOAD
-            </button>
-          )}
         </div>
       </div>
 

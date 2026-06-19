@@ -41,7 +41,7 @@ Reference/sketch: image 2.
 Spec: resolution:{resolution}. ratio 1:1.
 
 [TilesetGeneratorNode]
-You are a game artist. Your task is to re-skin the provided reference image, {1x1_Island_Default.jpg}, into a new game-ready island base while maintaining a 1:1 pixel-perfect silhouette match. You may change the rock (or other themed material) pattern on the cliff, but absolutely do not change island height or silhouette. IMPORTANT: make the surface texture seamless, meaning there should not be any standing out detail or noticeable change in color. The whole surface should be uniform in detail and color.
+You are a game artist. Your task is to re-skin the provided reference image, {1x1_Island_Default.jpg}, into a new game-ready island base while maintaining a 1:1 pixel-perfect silhouette match. You may change the rock (or other themed material) pattern on the cliff, but absolutely do not change island height or silhouette. IMPORTANT: make the surface texture seamless, meaning there should not be any standing out detail or change in color and shade. The whole surface should be uniform in detail and consistent in color, lighting and shading.
 
 1. Structural Integrity:
 The X-Island: Generate the upper X-shaped structure as a cohesive island base. This structure must perfectly align with the 13-component tile layout seen in {1x1_Island_Default.jpg}. The top surface and the vertical rocky side-walls must stay within the exact geometric boundaries of the reference.

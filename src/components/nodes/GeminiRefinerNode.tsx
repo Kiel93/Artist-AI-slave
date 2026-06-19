@@ -7,7 +7,7 @@ import { generateTextUniversal } from "@/lib/llm-router";
 
 export default function GeminiRefinerNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [isRefining, setIsRefining] = useState(false);
-  const [outputText, setOutputText] = useState<string>(data.outputText || data.refinedText || "");
+  const [text, setText] = useState<string>(data.text || "");
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>(data.model || "gemini-2.5-flash");
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
@@ -37,10 +37,10 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
       if (!sourceNode) return;
       
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.outputText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        const text = sourceNode.data.text|| "";
         if (text) textInputs.push(text);
       } else if (edge.targetHandle === 'image') {
-        const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
+        const image = sourceNode.data.image || sourceNode.data.imageUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
         if (image) imageInputs.push(image);
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
           imageInputs.push(...sourceNode.data.images);
@@ -60,11 +60,11 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
         {}
       );
       
-      if (result.success && result.data?.outputText) {
-        setOutputText(result.data.outputText);
+      if (result.success && result.data?.text) {
+        setText(result.data.text);
         setNodes(nds => nds.map(n => n.id === id ? { 
           ...n, 
-          data: { ...n.data, outputText: result.data.outputText } 
+          data: { ...n.data, text: result.data.text } 
         } : n));
       } else {
         alert("Refinement failed: " + result.error);
@@ -115,9 +115,9 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
 
         <div className="relative group">
           <div className={`min-h-[80px] bg-black/40 border border-emerald-500/20 rounded p-2 text-xs text-emerald-100/70 italic ${isCollapsed ? "max-h-24 overflow-hidden" : ""}`}>
-            {outputText || "Connect Prompt/Style nodes and click Refine to polish your prompt..."}
+            {text || "Connect Prompt/Style nodes and click Refine to polish your prompt..."}
           </div>
-          {outputText && outputText.length > 150 && (
+          {text && text.length > 150 && (
             <button 
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="absolute top-1 right-1 text-emerald-400 hover:text-emerald-300 transition-colors bg-[#1a1525]/80 p-0.5 rounded shadow-sm"

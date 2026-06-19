@@ -76,7 +76,7 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
     const edge = allEdges.find(e => e.target === id && e.targetHandle === handleId);
     if (!edge) return null;
     const node = nodes.find(n => n.id === edge.source);
-    return (node?.data as any)?.outputText || (node?.data as any)?.refinedText || (node?.data as any)?.text || (node?.data as any)?.bakedStyle || "";
+    return (node?.data as any)?.text || "";
   };
 
   // Compute final concatenated prompt
@@ -90,10 +90,10 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
     });
     
     const combinedText = parts.filter(t => t).join(" ");
-    if (data.outputText !== combinedText) {
-      setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, outputText: combinedText } } : n));
+    if (data.text !== combinedText) {
+      setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, text: combinedText } } : n));
     }
-  }, [handles, editableTexts, nodes, allEdges, id, setNodes, data.outputText]);
+  }, [handles, editableTexts, nodes, allEdges, id, setNodes, data.text]);
 
   const COLORS = [
     'bg-blue-500/20 border-blue-500/50 text-blue-200',

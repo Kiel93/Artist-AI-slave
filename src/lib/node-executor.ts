@@ -139,7 +139,7 @@ const performChromaKey = (generatedImgUrl: string, currentThreshold: number = 30
 // EXISTING EXECUTORS
 // -------------------------------------------------------------
 export const executePromptNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
-  return { success: true, data: { outputText: nodeData.outputText || nodeData.text || "" } };
+  return { success: true, data: { text: nodeData.text || "" } };
 };
 
 export const executeGeminiRefinerNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
@@ -152,7 +152,7 @@ export const executeGeminiRefinerNode = async (nodeData: any, inputs: NodeExecut
     const finalPrompt = systemPrompt.replace('{prompt}', rawPrompt);
     const imageRefs = inputs.imageInputs.length > 0 ? inputs.imageInputs : undefined;
     const response = await generateTextUniversal(finalPrompt, imageRefs, model);
-    if (response.success && response.text) return { success: true, data: { outputText: response.text } };
+    if (response.success && response.text) return { success: true, data: { text: response.text } };
     return { success: false, error: response.error || (response as any).message || JSON.stringify(response) };
   } catch (error: any) {
     return { success: false, error: error.message || "Error calling Gemini API." };
@@ -165,7 +165,7 @@ export const executeImageExplainedNode = async (nodeData: any, inputs: NodeExecu
   const generatedPrompt = `Describe what is going on in these ${Math.max(1, inputs.imageInputs.length)} image(s) in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image. You must write approximately 1000 characters for each image.`;
   try {
     const response = await explainImageUniversal(inputs.imageInputs, generatedPrompt, model);
-    if (response.success && response.text) return { success: true, data: { outputText: response.text } };
+    if (response.success && response.text) return { success: true, data: { text: response.text } };
     return { success: false, error: response.error || (response as any).message || JSON.stringify(response) };
   } catch (error: any) {
     return { success: false, error: error.message || "Error calling Gemini API." };
@@ -205,7 +205,7 @@ export const executeGeneralImageGenerationNode = async (nodeData: any, inputs: N
           if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
             clearInterval(interval);
             const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
-            resolve({ success: true, data: { outputImage: finalUrl } });
+            resolve({ success: true, data: { image: finalUrl } });
           } else if (res.status === 'failed' || (res.status as string) === 'error') {
             clearInterval(interval);
             resolve({ success: false, error: (res as any).error || (res as any).message || "Generation failed on server." });
@@ -226,27 +226,27 @@ export const executeGeneralImageGenerationNode = async (nodeData: any, inputs: N
 // -------------------------------------------------------------
 
 export const executePromptConnectorNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
-  const handles = nodeData.handles || [];
+  const handles = nodeData.handles && nodeData.handles.length > 0 ? nodeData.handles : ["text-h0", "text-h1"];
   const editableTexts = nodeData.editableTexts || {};
   const parts: string[] = [];
   handles.forEach((h: string) => {
     if (editableTexts[h]) parts.push(editableTexts[h]);
     if (inputs.namedInputs?.[h]) {
       const srcOut = inputs.namedInputs[h];
-      parts.push(srcOut.outputText || srcOut.refinedText || srcOut.text || srcOut.bakedStyle || "");
+      parts.push(srcOut.text || "");
     }
   });
-  return { success: true, data: { outputText: parts.filter(Boolean).join(" ") } };
+  return { success: true, data: { text: parts.filter(Boolean).join(" ") } };
 };
 
 export const executeReferenceImageNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
-  return { success: true, data: { outputImage: nodeData.outputImage || nodeData.imageUrl || inputs.imageInputs[0] || null } };
+  return { success: true, data: { image: nodeData.image || nodeData.imageUrl || inputs.imageInputs[0] || null } };
 };
 
 export const executeIsometricDrawNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
   return {
     success: true,
-    data: { outputText: "Create an isometric asset sheet of the subject. Show the subject from 4 different isometric angles (Northwest, Southwest, Northeast, Southeast). Render against a solid white background with no environmental context. Perfect for 2D game engines." }
+    data: { text: "Create an isometric asset sheet of the subject. Show the subject from 4 different isometric angles (Northwest, Southwest, Northeast, Southeast). Render against a solid white background with no environmental context. Perfect for 2D game engines." }
   };
 };
 
@@ -258,7 +258,7 @@ export const executeStyleInsertNode = async (nodeData: any, inputs: NodeExecutio
     let prompt = await fetchNodePrompt('StyleInsertNode');
     if (!prompt) prompt = "Analyze the artistic style, color palette, lighting, and mood of these images. Create a concise 'Style Signature' (1-2 sentences) that can be used to replicate this style in other prompts.";
     const response = await generateTextUniversal(prompt, allImages, nodeData.model || "gemini-2.5-flash");
-    if (response.success && response.text) return { success: true, data: { outputText: response.text } };
+    if (response.success && response.text) return { success: true, data: { text: response.text } };
     return { success: false, error: response.error || "Style baking failed." };
   } catch (e: any) {
     return { success: false, error: e.message };
@@ -266,7 +266,7 @@ export const executeStyleInsertNode = async (nodeData: any, inputs: NodeExecutio
 };
 
 export const executeBackgroundRemoverNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
-  const inputImageUrl = inputs.namedInputs?.['image']?.outputImage || inputs.imageInputs[0];
+  const inputImageUrl = inputs.namedInputs?.['image']?.image || inputs.imageInputs[0];
   if (!inputImageUrl) return { success: false, error: "No input image connected." };
   try {
     const blob = await imglyRemoveBackground(inputImageUrl);
@@ -309,14 +309,14 @@ export const executeBackgroundRemoverNode = async (nodeData: any, inputs: NodeEx
       };
       img.src = base64Url;
     });
-    return { success: true, data: { outputImage: trimmedBase64 } };
+    return { success: true, data: { image: trimmedBase64 } };
   } catch (err: any) {
     return { success: false, error: err.message || "BG removal failed." };
   }
 };
 
 export const executeTileCutterNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
-  const imageUrl = inputs.namedInputs?.['image']?.outputImage || inputs.imageInputs[0];
+  const imageUrl = inputs.namedInputs?.['image']?.image || inputs.imageInputs[0];
   if (!imageUrl) return { success: false, error: "No input image connected." };
   const zoom = nodeData.zoom ?? 100;
   const feather = nodeData.feather ?? 2;
@@ -350,7 +350,7 @@ export const executeTileCutterNode = async (nodeData: any, inputs: NodeExecution
       if (feather > 1) { ctx.shadowColor = 'black'; ctx.shadowBlur = feather * 3; }
       ctx.fill();
 
-      resolve({ success: true, data: { outputImage: cutCanvas.toDataURL('image/png') } });
+      resolve({ success: true, data: { image: cutCanvas.toDataURL('image/png') } });
     };
     img.onerror = () => resolve({ success: false, error: "Failed to load tile image." });
   });
@@ -361,13 +361,16 @@ export const executeAssetGeneratorNode = async (nodeData: any, inputs: NodeExecu
   if (!apiKey) return { success: false, error: "API Key is missing." };
 
   const promptParts: string[] = [];
-  if (nodeData.localPrompt) promptParts.push(nodeData.localPrompt);
-  if (inputs.namedInputs?.['text']) promptParts.push(inputs.namedInputs['text'].outputText);
+  if (inputs.namedInputs?.['text'] && inputs.namedInputs['text'].text) {
+    promptParts.push(inputs.namedInputs['text'].text);
+  } else if (nodeData.localPrompt) {
+    promptParts.push(nodeData.localPrompt);
+  }
   
   const objectPrompt = promptParts.join(", ") || "object";
-  const styleInput = inputs.namedInputs?.['style']?.outputText || "";
-  const inputImageUrl = inputs.namedInputs?.['image']?.outputImage || "";
-  const secondaryImageUrl = inputs.namedInputs?.['image-2']?.outputImage || "";
+  const styleInput = inputs.namedInputs?.['style']?.text || "";
+  const inputImageUrl = inputs.namedInputs?.['image']?.image || "";
+  const secondaryImageUrl = inputs.namedInputs?.['image-2']?.image || "";
 
   if (!inputImageUrl) return { success: false, error: "Base Island image missing." };
 
@@ -407,7 +410,7 @@ export const executeAssetGeneratorNode = async (nodeData: any, inputs: NodeExecu
             const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
             try {
               const extractedAssetUrl = await performChromaKey(finalUrl, nodeData.threshold || 30);
-              resolve({ success: true, data: { outputImage: extractedAssetUrl, generatedUrl: finalUrl } });
+              resolve({ success: true, data: { image: extractedAssetUrl, generatedUrl: finalUrl } });
             } catch (err: any) {
               resolve({ success: false, error: err.message || "Chroma key failed." });
             }
@@ -431,12 +434,15 @@ export const executeTilesetGeneratorNode = async (nodeData: any, inputs: NodeExe
   if (!apiKey) return { success: false, error: "API Key is missing." };
 
   const promptParts: string[] = [];
-  if (nodeData.localPrompt) promptParts.push(nodeData.localPrompt);
-  if (inputs.namedInputs?.['text']) promptParts.push(inputs.namedInputs['text'].outputText);
+  if (inputs.namedInputs?.['text'] && inputs.namedInputs['text'].text) {
+    promptParts.push(inputs.namedInputs['text'].text);
+  } else if (nodeData.localPrompt) {
+    promptParts.push(nodeData.localPrompt);
+  }
   
   const themePrompt = promptParts.join(", ") || "Fantasy terrain";
-  const styleString = inputs.namedInputs?.['style']?.outputText || "Game art";
-  const inputImageUrl = inputs.namedInputs?.['image']?.outputImage || "";
+  const styleString = inputs.namedInputs?.['style']?.text || "Game art";
+  const inputImageUrl = inputs.namedInputs?.['image']?.image || "";
 
   let baseApiPrompt = await fetchNodePrompt('TilesetGeneratorNode');
   if (!baseApiPrompt) {
@@ -448,11 +454,37 @@ export const executeTilesetGeneratorNode = async (nodeData: any, inputs: NodeExe
 
   try {
     let refs = [];
+
+    // Fetch and upload the default blueprint (same as frontend)
+    const imgRes = await fetch('/assets/hex-tool/1x1_Island_Default.png');
+    const blob = await imgRes.blob();
+    const reader = new FileReader();
+    const base64Data: string = await new Promise((resolve) => {
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+    const uploadRes = await uploadMediaDirect(apiKey, base64Data);
+    const referenceUrl = uploadRes.url || uploadRes.cdn_url;
+    if (referenceUrl) refs.push(referenceUrl);
+
+    // Fetch and upload additional custom input image if provided
     if (inputImageUrl) {
-      if (inputImageUrl.startsWith('data:image/') || inputImageUrl.startsWith('blob:')) {
+      if (inputImageUrl.startsWith('data:image/')) {
         const up = await uploadMediaDirect(apiKey, inputImageUrl);
         refs.push(up.url || up.cdn_url);
-      } else { refs.push(inputImageUrl); }
+      } else if (inputImageUrl.startsWith('blob:')) {
+        const customImgRes = await fetch(inputImageUrl);
+        const customBlob = await customImgRes.blob();
+        const customReader = new FileReader();
+        const customBase64: string = await new Promise((resolve) => {
+          customReader.onloadend = () => resolve(customReader.result as string);
+          customReader.readAsDataURL(customBlob);
+        });
+        const up = await uploadMediaDirect(apiKey, customBase64);
+        refs.push(up.url || up.cdn_url);
+      } else {
+        refs.push(inputImageUrl); 
+      }
     }
 
     const response = await queueImageGen(apiKey, { prompt: apiPrompt, model: nodeData.model || "nano-banana-pro", resolution: selectedResolution, aspect_ratio: "1:1", references_urls: refs.length > 0 ? refs : undefined });
@@ -465,7 +497,7 @@ export const executeTilesetGeneratorNode = async (nodeData: any, inputs: NodeExe
           const isDone = res.status === 'succeeded' || (res.status as string) === 'completed' || (res.status as string) === 'success' || !!res.result_url;
           if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
             clearInterval(interval);
-            resolve({ success: true, data: { outputImage: res.result_url || (res as any).url || (res as any).image_url } });
+            resolve({ success: true, data: { image: res.result_url || (res as any).url || (res as any).image_url } });
           } else if (res.status === 'failed' || (res.status as string) === 'error') {
             clearInterval(interval);
             resolve({ success: false, error: "Generation failed." });
@@ -482,7 +514,7 @@ export const executeTilesetGeneratorNode = async (nodeData: any, inputs: NodeExe
 };
 
 export const executeIsometricHexSlicerNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
-  const imageUrl = inputs.namedInputs?.['image']?.outputImage || inputs.imageInputs[0];
+  const imageUrl = inputs.namedInputs?.['image']?.image || inputs.imageInputs[0];
   if (!imageUrl) return { success: false, error: "No input image connected." };
   
   return new Promise((resolve) => {
@@ -655,8 +687,8 @@ export const executeIsometricHexSlicerNode = async (nodeData: any, inputs: NodeE
       }
 
       // Return the slices as outputImages
-      // Compound node logic expects outputImage (primary) and maybe outputImages (all)
-      resolve({ success: true, data: { outputImages: newSlices, outputImage: Object.values(newSlices)[0] } });
+      // Compound node logic expects image (primary) and maybe outputImages (all)
+      resolve({ success: true, data: { images: newSlices, image: Object.values(newSlices)[0] } });
     }).catch(err => {
       resolve({ success: false, error: err.message });
     });
@@ -703,16 +735,16 @@ export const executeNode = async (
       return { 
         success: true, 
         data: { 
-           outputText: inputs.textInputs[0] || "",
-           outputImage: inputs.imageInputs[0] || "" 
+           text: inputs.textInputs[0] || "",
+           image: inputs.imageInputs[0] || "" 
         } 
       };
     case 'graphOutput':
       return { 
         success: true, 
         data: { 
-           outputText: inputs.textInputs.join(" ") || "",
-           outputImage: inputs.imageInputs[0] || "" 
+           text: inputs.textInputs.join(" ") || "",
+           image: inputs.imageInputs[0] || "" 
         } 
       };
     default:

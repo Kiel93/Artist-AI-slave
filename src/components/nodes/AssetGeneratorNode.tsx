@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Handle, Position, useReactFlow } from "reactflow";
-import { ImageIcon, RefreshCw, Play, AlertCircle, ChevronDown, Eye, PenTool } from "lucide-react";
+import { ImageIcon, RefreshCw, Play, AlertCircle, ChevronDown, Eye, PenTool, Download } from "lucide-react";
 import { queueImageGen, getTaskStatus, uploadMediaDirect, fetchNodePrompt } from "@/lib/plenxai";
 
 const MODELS = [
@@ -18,7 +18,7 @@ const RESOLUTIONS = [
 
 export default function AssetGeneratorNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "diffing" | "succeeded" | "failed">("idle");
-  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
+  const [image, setImage] = useState<string | null>(data.image || null);
   const [basePreviewUrl, setBasePreviewUrl] = useState<string | null>(data.basePreviewUrl || null);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
@@ -178,17 +178,17 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        const text = sourceNode.data.text|| "";
         if (text) promptParts.push(text);
       }
       if (edge.targetHandle === 'style') {
-        styleInput = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        styleInput = sourceNode.data.text|| "";
       }
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        inputImageUrl = sourceNode.data.image|| "";
       }
       if (edge.targetHandle === 'image-2') {
-        secondaryImageUrl = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
+        secondaryImageUrl = sourceNode.data.image|| "";
       }
     });
 
@@ -318,11 +318,11 @@ Spec: resolution:{resolution}. ratio 1:1.`;
           // Proceed to chroma key!
           try {
             const extractedAssetUrl = await performChromaKey(fetchedGenUrl, threshold);
-            setOutputImage(extractedAssetUrl);
+            setImage(extractedAssetUrl);
             setStatus("succeeded");
             setNodes(nds => nds.map(n => n.id === id ? { 
               ...n, 
-              data: { ...n.data, outputImage: extractedAssetUrl, generatedUrl: fetchedGenUrl, threshold } 
+              data: { ...n.data, image: extractedAssetUrl, generatedUrl: fetchedGenUrl, threshold } 
             } : n));
           } catch (err) {
             console.error("Chroma key failed after generation:", err);
@@ -410,11 +410,11 @@ Spec: resolution:{resolution}. ratio 1:1.`;
                     try {
                       setStatus("diffing");
                       const extractedAssetUrl = await performChromaKey(generatedUrl, threshold);
-                      setOutputImage(extractedAssetUrl);
+                      setImage(extractedAssetUrl);
                       setStatus("succeeded");
                       setNodes(nds => nds.map(n => n.id === id ? { 
                         ...n, 
-                        data: { ...n.data, outputImage: extractedAssetUrl, threshold } 
+                        data: { ...n.data, image: extractedAssetUrl, threshold } 
                       } : n));
                     } catch (err) {
                       console.error(err);
@@ -442,10 +442,10 @@ Spec: resolution:{resolution}. ratio 1:1.`;
               if (generatedUrl) {
                 try {
                   const extractedAssetUrl = await performChromaKey(generatedUrl, newThreshold);
-                  setOutputImage(extractedAssetUrl);
+                  setImage(extractedAssetUrl);
                   setNodes(nds => nds.map(n => n.id === id ? { 
                     ...n, 
-                    data: { ...n.data, outputImage: extractedAssetUrl, threshold: newThreshold } 
+                    data: { ...n.data, image: extractedAssetUrl, threshold: newThreshold } 
                   } : n));
                 } catch (err) {
                   console.error(err);
@@ -524,14 +524,30 @@ Spec: resolution:{resolution}. ratio 1:1.`;
 
         {/* Image Preview */}
         <div 
-          className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative"
+          className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
           style={{
-            backgroundImage: outputImage ? `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)` : 'none',
+            backgroundImage: image ? `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)` : 'none',
             backgroundSize: '20px 20px'
           }}
         >
-          {outputImage ? (
-            <img src={outputImage} className="w-full h-full object-contain drop-shadow-2xl" alt="Extracted Asset" />
+          {image ? (
+            <>
+              <img src={image} className="w-full h-full object-contain drop-shadow-2xl" alt="Extracted Asset" />
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                <button
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = image;
+                    a.download = `asset-${id}.png`;
+                    a.target = '_blank';
+                    a.click();
+                  }}
+                  className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-3 shadow-xl transition-transform hover:scale-105 pointer-events-auto"
+                >
+                  <Download className="w-6 h-6" />
+                </button>
+              </div>
+            </>
           ) : (
             <>
               {(status === 'queueing' || status === 'polling' || status === 'diffing') ? (
@@ -559,20 +575,6 @@ Spec: resolution:{resolution}. ratio 1:1.`;
             <Play className="w-3 h-3 fill-current" />
             GENERATE & EXTRACT
           </button>
-          {outputImage && (
-            <button
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = outputImage;
-                a.download = `asset-${id}.png`;
-                a.target = '_blank';
-                a.click();
-              }}
-              className="nodrag flex-1 py-2 bg-gray-700/80 hover:bg-gray-600 border border-gray-500/50 text-white text-xs font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-1"
-            >
-              DOWNLOAD PNG
-            </button>
-          )}
         </div>
       </div>
 

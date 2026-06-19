@@ -17,7 +17,7 @@ const MODELS = [
 
 export default function GeneralImageGenerationNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "succeeded" | "failed">("idle");
-  const [outputImage, setOutputImage] = useState<string | null>(data.outputImage || data.resultUrl || null);
+  const [image, setImage] = useState<string | null>(data.image || null);
   const [error, setError] = useState<string | null>(null);
   const [lastRunHash, setLastRunHash] = useState<string>(data.lastRunHash || "");
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
@@ -68,10 +68,10 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
       if (!sourceNode) return;
 
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || "";
+        const text = sourceNode.data.text|| "";
         if (text) textInputs.push(text);
       } else if (edge.targetHandle?.startsWith('image-') || edge.targetHandle?.startsWith('img-')) {
-        const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
+        const image = sourceNode.data.image|| sourceNode.data.referenceImage || sourceNode.data.bakedImage;
         if (image) imageInputs.push(image);
         // Also handle StyleInsertNode or bulk images if connected to an image handle
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
@@ -84,7 +84,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
     const currentHash = JSON.stringify({ prompt: finalPrompt, images: imageInputs, model: selectedModel });
 
     // 2. Change Detection
-    if (status === 'succeeded' && currentHash === lastRunHash && outputImage) {
+    if (status === 'succeeded' && currentHash === lastRunHash && image) {
       console.log("No changes detected, skipping API call.");
       return;
     }
@@ -114,13 +114,13 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
         { apiKey }
       );
 
-      if (result.success && result.data?.outputImage) {
-        setOutputImage(result.data.outputImage);
+      if (result.success && result.data?.image) {
+        setImage(result.data.image);
         setStatus("succeeded");
         setLastRunHash(currentHash);
         setNodes(nds => nds.map(n => n.id === id ? { 
           ...n, 
-          data: { ...n.data, outputImage: result.data.outputImage, lastRunHash: currentHash } 
+          data: { ...n.data, image: result.data.image, lastRunHash: currentHash } 
         } : n));
       } else {
         setError(result.error || "Generation failed on server.");
@@ -236,9 +236,22 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
         </div>
         
         {/* Bottom Panel: Image Preview */}
-        <div className="w-full aspect-square bg-black/50 border border-blue-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative">
-          {outputImage ? (
-            <img src={outputImage} className="w-full h-full object-contain" alt="generated" />
+        <div className="w-full aspect-square bg-black/50 border border-blue-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group">
+          {image ? (
+            <>
+              <img src={image} className="w-full h-full object-contain" alt="generated" />
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                <a
+                  href={image}
+                  download={`generated-${id}.png`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-3 shadow-xl transition-transform hover:scale-105 pointer-events-auto"
+                >
+                  <Download className="w-6 h-6" />
+                </a>
+              </div>
+            </>
           ) : (
             <>
               {(status === 'queueing' || status === 'polling') ? (
@@ -265,21 +278,11 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
           <button 
             onClick={generateImage}
             disabled={status === 'queueing' || status === 'polling'}
-            className="nodrag flex-[2] py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
           >
             <Play className="w-4 h-4 fill-current" />
             GENERATE
           </button>
-          {outputImage && (
-            <a 
-              href={outputImage} 
-              target="_blank" 
-              rel="noreferrer"
-              className="nodrag flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded flex items-center justify-center"
-            >
-              <Download className="w-4 h-4" />
-            </a>
-          )}
         </div>
       </div>
 

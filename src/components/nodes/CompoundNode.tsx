@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Handle, Position, useReactFlow } from "reactflow";
-import { Play, Layers, RefreshCw, AlertCircle, Grid, X } from "lucide-react";
+import { Play, Layers, RefreshCw, AlertCircle, Grid, X, Download, Copy } from "lucide-react";
 import { NodeExecutionInput, NodeExecutionContext } from "@/lib/node-executor";
 
 export default function CompoundNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
@@ -10,6 +10,15 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
   const [isGridOpen, setIsGridOpen] = useState(false);
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
+
+  const downloadImage = (url: string, filename: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   const handleRunPipeline = async () => {
     setIsExecuting(true);
@@ -33,17 +42,17 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
         // We directly seed the nodeOutputs for the GraphInputNode
         // GraphInputNode just passes data through, so its 'output' is the external data
         if (!nodeOutputs[e.targetHandle]) {
-          nodeOutputs[e.targetHandle] = { outputText: "", outputImage: "" };
+          nodeOutputs[e.targetHandle] = { text: "", image: "" };
         }
         
-        const image = sourceNode.data.outputImage || sourceNode.data.imageUrl || sourceNode.data.resultUrl || sourceNode.data.image || "";
-        const text = sourceNode.data.outputText || sourceNode.data.refinedText || sourceNode.data.text || sourceNode.data.bakedStyle || sourceNode.data.prompt || "";
+        const image = sourceNode.data.image|| "";
+        const text = sourceNode.data.text|| "";
 
         if (image) {
-           nodeOutputs[e.targetHandle].outputImage = image;
+           nodeOutputs[e.targetHandle].image = image;
         }
         if (text) {
-           nodeOutputs[e.targetHandle].outputText = text;
+           nodeOutputs[e.targetHandle].text = text;
         }
       }
     });
@@ -85,13 +94,18 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
         incomingEdges.forEach((e: any) => {
           const sourceOutput = nodeOutputs[e.source];
           if (sourceOutput) {
-            if (e.targetHandle?.includes('text') && sourceOutput.outputText) {
-              textInputs.push(sourceOutput.outputText);
-            } else if ((e.targetHandle?.includes('image') || e.targetHandle?.includes('img')) && sourceOutput.outputImage) {
-              imageInputs.push(sourceOutput.outputImage);
+            let specificImage = sourceOutput.image;
+            if (sourceOutput.images && e.sourceHandle && sourceOutput.images[e.sourceHandle]) {
+              specificImage = sourceOutput.images[e.sourceHandle];
+            }
+
+            if (e.targetHandle?.includes('text') && sourceOutput.text) {
+              textInputs.push(sourceOutput.text);
+            } else if ((e.targetHandle?.includes('image') || e.targetHandle?.includes('img')) && specificImage) {
+              imageInputs.push(specificImage);
             }
             if (e.targetHandle) {
-              namedInputs[e.targetHandle] = sourceOutput;
+              namedInputs[e.targetHandle] = { ...sourceOutput, image: specificImage || sourceOutput.image };
             }
           }
         });
@@ -126,22 +140,29 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
       
       const outputNodes = internalNodes.filter((n: any) => n.type === 'graphOutput');
       const finalImages: Record<string, string> = {};
+      const finalTexts: Record<string, string> = {};
       
       outputNodes.forEach((n: any) => {
          const out = nodeOutputs[n.id];
-         if (out && out.outputImage) {
-           finalImages[n.id] = out.outputImage;
+         if (out && out.image) {
+           finalImages[n.id] = out.image;
+         }
+         if (out && out.text) {
+           finalTexts[n.id] = out.text;
          }
       });
       
-      const lastOutput = Object.values(nodeOutputs).reverse().find(o => o.outputImage);
+      const lastOutput = Object.values(nodeOutputs).reverse().find(o => o.image);
+      const lastTextOutput = Object.values(nodeOutputs).reverse().find(o => o.text);
       
       setNodes(nds => nds.map(n => n.id === id ? {
         ...n,
         data: { 
            ...n.data, 
-           outputImage: Object.values(finalImages)[0] || (lastOutput ? lastOutput.outputImage : undefined),
-           outputImages: Object.keys(finalImages).length > 0 ? finalImages : undefined
+           image: Object.values(finalImages)[0] || (lastOutput ? lastOutput.image : undefined),
+           images: Object.keys(finalImages).length > 0 ? finalImages : undefined,
+           text: Object.values(finalTexts)[0] || (lastTextOutput ? lastTextOutput.text : undefined),
+           texts: Object.keys(finalTexts).length > 0 ? finalTexts : undefined
         }
       } : n));
 
@@ -231,28 +252,56 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
         )}
 
         {/* Display final output image if available */}
-        {data.outputImage && (
+        {data.image && (
           <div className="w-full aspect-square bg-black/50 border border-purple-500/20 rounded overflow-hidden mt-2 relative group">
-            <img src={data.outputImage} className="w-full h-full object-contain" alt="Pipeline Output" />
+            <img src={data.image} className="w-full h-full object-contain" alt="Pipeline Output" />
             
-            {data.outputImages && Object.keys(data.outputImages).length > 1 && (
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm z-10 pointer-events-none">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); downloadImage(data.image, "output.png"); }} 
+                  className="p-4 bg-purple-600 hover:bg-purple-500 text-white rounded-full shadow-2xl transform hover:scale-110 transition-all pointer-events-auto"
+                >
+                  <Download className="w-6 h-6" />
+                </button>
+            </div>
+
+            {data.images && Object.keys(data.images).length > 1 && (
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsGridOpen(true); }}
-                className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shadow-lg border border-white/10 nodrag"
+                className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shadow-lg border border-white/10 nodrag z-20 pointer-events-auto"
               >
                 <Grid className="w-4 h-4" />
-                <span className="text-[10px] font-bold pr-1">View All ({Object.keys(data.outputImages).length})</span>
+                <span className="text-[10px] font-bold pr-1">View All ({Object.keys(data.images).length})</span>
               </button>
             )}
           </div>
         )}
 
+        {/* Display final output text if available but no image */}
+        {data.text && !data.image && (
+          <div className="w-full h-24 bg-black/50 border border-purple-500/20 rounded mt-2 p-2 relative group overflow-hidden">
+            <div className="w-full h-full text-[10px] text-purple-200/80 overflow-hidden whitespace-pre-wrap">
+               {data.text}
+            </div>
+            
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm z-10 pointer-events-none">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(data.text); }} 
+                  className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-2xl transform hover:scale-110 transition-all pointer-events-auto"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+            </div>
+          </div>
+        )}
 
-        <div className="flex flex-col gap-1 pt-2 border-t border-purple-500/20">
+        <div className="flex flex-col pt-2 mt-2 border-t border-purple-500/20">
           {data.outputPins?.map((pin: any) => {
              const pinId = typeof pin === 'string' ? pin : pin.id;
              const pinType = typeof pin === 'string' ? (pin.includes('image') ? 'image' : 'text') : pin.type;
              const pinLabel = typeof pin === 'string' ? pin : pin.label;
+             const hasImage = data.images && data.images[pinId];
+             const hasText = data.texts && data.texts[pinId];
              return (
                <div key={pinId} className="relative flex items-center justify-end h-6">
                  <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">{pinLabel}</span>
@@ -269,7 +318,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
       </div>
 
       {/* Floating Grid Pop-out */}
-      {isGridOpen && data.outputImages && (
+      {isGridOpen && data.images && (
         <div 
            className="absolute top-0 right-[-340px] w-80 bg-[#1a1525] border-2 border-purple-500/50 rounded-lg shadow-[0_0_25px_rgba(168,85,247,0.3)] z-50 p-3 nodrag cursor-default"
            onClick={(e) => e.stopPropagation()}
@@ -285,14 +334,21 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
           </div>
           
           <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
-            {Object.entries(data.outputImages).map(([pinId, imageUrl]) => {
+            {Object.entries(data.images).map(([pinId, imageUrl]) => {
               const pinInfo = data.outputPins?.find((p: any) => p.id === pinId);
               const label = pinInfo ? pinInfo.label : "Output";
               
               return (
-                <div key={pinId} className="flex flex-col gap-1.5">
-                  <div className="aspect-square bg-black/60 rounded border border-gray-700/50 overflow-hidden">
+                <div key={pinId} className="flex flex-col gap-1.5 relative group/img">
+                  <div className="aspect-square bg-black/60 rounded border border-gray-700/50 overflow-hidden relative">
                     <img src={imageUrl as string} className="w-full h-full object-cover hover:scale-110 transition-transform duration-300" alt={label} />
+                    
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm z-10 pointer-events-none">
+                      <button onClick={(e) => { e.stopPropagation(); downloadImage(imageUrl as string, `${label}.png`); }} className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full shadow-2xl transform hover:scale-110 transition-all pointer-events-auto">
+                        <Download className="w-5 h-5" />
+                      </button>
+                    </div>
+
                   </div>
                   <span className="text-[9px] text-center text-gray-400 uppercase tracking-wider truncate px-1">{label}</span>
                 </div>
