@@ -162,7 +162,8 @@ export const executeGeminiRefinerNode = async (nodeData: any, inputs: NodeExecut
 export const executeImageExplainedNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
   if (inputs.imageInputs.length === 0) return { success: false, error: "No input images provided." };
   const model = nodeData.model || "gemini-2.5-flash";
-  const generatedPrompt = `Describe what is going on in these ${Math.max(1, inputs.imageInputs.length)} image(s) in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image. You must write approximately 1000 characters for each image.`;
+  const wordCountLimit = nodeData.wordCountLimit || 500;
+  const generatedPrompt = `Describe what is going on in these ${Math.max(1, inputs.imageInputs.length)} image(s) in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image. You must write approximately ${wordCountLimit} words for each image.`;
   try {
     const response = await explainImageUniversal(inputs.imageInputs, generatedPrompt, model);
     if (response.success && response.text) return { success: true, data: { text: response.text } };
@@ -175,7 +176,11 @@ export const executeImageExplainedNode = async (nodeData: any, inputs: NodeExecu
 export const executeGeneralImageGenerationNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
   const apiKey = context.apiKey;
   if (!apiKey) return { success: false, error: "API Key is missing." };
-  const finalPrompt = inputs.textInputs.join(", ");
+  
+  const textInputs = [...inputs.textInputs];
+  if (nodeData.localPrompt) textInputs.push(nodeData.localPrompt);
+  const finalPrompt = textInputs.join(", ");
+  
   if (!finalPrompt) return { success: false, error: "No prompt detected." };
   const model = nodeData.model || "nano-banana-pro";
   const base64Images = inputs.imageInputs.filter(img => img.startsWith('data:image'));
@@ -224,6 +229,151 @@ export const executeGeneralImageGenerationNode = async (nodeData: any, inputs: N
 // -------------------------------------------------------------
 // NEW EXECUTORS
 // -------------------------------------------------------------
+
+export const executeShadowExtractorNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
+  const inputImageUrl = inputs.namedInputs?.['image']?.image || inputs.imageInputs[0];
+  if (!inputImageUrl) return { success: false, error: "No input image connected." };
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const w = img.width;
+        const h = img.height;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve({ success: false, error: "Canvas 2D unsupported." });
+        
+        // Fill white background first to handle transparent inputs
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, w, h);
+        
+        // Draw image over it
+        ctx.drawImage(img, 0, 0);
+        
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+        const intensity = nodeData.intensity !== undefined ? nodeData.intensity : 0;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Strict Grayscale conversion (Luminance)
+          const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+          const originalAlphaNorm = (255 - Math.round(luminance)) / 255.0;
+          let finalAlphaNorm = originalAlphaNorm;
+          
+          if (intensity < 0) {
+            finalAlphaNorm = originalAlphaNorm * ((100 + intensity) / 100.0);
+          } else if (intensity > 0) {
+            const addedAlpha = originalAlphaNorm * (intensity / 100.0);
+            finalAlphaNorm = addedAlpha + originalAlphaNorm * (1.0 - addedAlpha);
+          }
+          
+          // Multiply logic: Set color to black, and alpha to calculated opacity
+          data[i] = 0;
+          data[i + 1] = 0;
+          data[i + 2] = 0;
+          data[i + 3] = Math.round(finalAlphaNorm * 255);
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        resolve({ success: true, data: { image: canvas.toDataURL("image/png") } });
+      } catch (err: any) {
+        resolve({ success: false, error: err.message || "Failed to process image." });
+      }
+    };
+    img.onerror = () => resolve({ success: false, error: "Failed to load input image." });
+    img.src = inputImageUrl;
+  });
+};
+
+export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
+  const layers = nodeData.layers || [];
+  if (layers.length === 0) return { success: true, data: { image: null } };
+
+  // Load all images
+  const loadedImages: { layer: any; img: HTMLImageElement; width: number; height: number }[] = [];
+  
+  for (const layer of layers) {
+    const imageUrl = inputs.namedInputs?.[layer.handleId]?.image;
+    if (imageUrl) {
+      try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new Image();
+          image.crossOrigin = "anonymous";
+          image.onload = () => resolve(image);
+          image.onerror = reject;
+          image.src = imageUrl;
+        });
+        loadedImages.push({ layer, img, width: img.width, height: img.height });
+      } catch (e) {
+        console.warn(`Failed to load image for layer ${layer.handleId}`);
+      }
+    }
+  }
+
+  if (loadedImages.length === 0) return { success: true, data: { image: null } };
+
+  // Determine canvas size: largest width and largest height among all images
+  // Wait, user said "fit the largest detectable image". Let's use max width and max height of any loaded image.
+  let maxWidth = 0;
+  let maxHeight = 0;
+  for (const { width, height } of loadedImages) {
+    if (width > maxWidth) maxWidth = width;
+    if (height > maxHeight) maxHeight = height;
+  }
+
+  // Draw composition
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = maxWidth;
+    canvas.height = maxHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { success: false, error: "Canvas 2D unsupported." };
+
+    // Sort layers by zIndex
+    loadedImages.sort((a, b) => a.layer.zIndex - b.layer.zIndex);
+
+    for (const { layer, img, width, height } of loadedImages) {
+      ctx.save();
+      
+      // The origin of transformation should be the center of the canvas + layer translation
+      // Default: layer centered on canvas
+      const centerX = maxWidth / 2 + (layer.x || 0);
+      const centerY = maxHeight / 2 + (layer.y || 0);
+      
+      ctx.translate(centerX, centerY);
+      if (layer.rotation) {
+        ctx.rotate((layer.rotation * Math.PI) / 180);
+      }
+      
+      const scaleX = layer.scaleX !== undefined ? layer.scaleX : (layer.scale !== undefined ? layer.scale : 1);
+      const scaleY = layer.scaleY !== undefined ? layer.scaleY : (layer.scale !== undefined ? layer.scale : 1);
+      if (scaleX !== 1 || scaleY !== 1) {
+        ctx.scale(scaleX, scaleY);
+      }
+      
+      if (layer.opacity !== undefined) {
+        ctx.globalAlpha = layer.opacity;
+      }
+      
+      // Draw image centered at the translated origin
+      ctx.drawImage(img, -width / 2, -height / 2, width, height);
+      
+      ctx.restore();
+    }
+
+    return { success: true, data: { image: canvas.toDataURL("image/png") } };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Compositing failed." };
+  }
+};
 
 export const executePromptConnectorNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
   const handles = nodeData.handles && nodeData.handles.length > 0 ? nodeData.handles : ["text-h0", "text-h1"];
@@ -725,6 +875,10 @@ export const executeNode = async (
       return executeBackgroundRemoverNode(nodeData, inputs, context);
     case 'tileCutter':
       return executeTileCutterNode(nodeData, inputs, context);
+    case 'shadowExtractor':
+      return executeShadowExtractorNode(nodeData, inputs, context);
+    case 'imageEditor':
+      return executeImageEditorNode(nodeData, inputs, context);
     case 'assetGenerator':
       return executeAssetGeneratorNode(nodeData, inputs, context);
     case 'tilesetGenerator':

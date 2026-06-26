@@ -52,6 +52,7 @@ To ensure all nodes feel like they belong to a cohesive application, adhere to t
 *   **Sliders (Range Inputs)**: Use `w-full accent-[semantic-color]-500` for native HTML range inputs to match the node's theme.
 *   **Icons**: Always use `lucide-react` icons. Give them a standardized size (e.g., `w-5 h-5` for headers, `w-4 h-4` for inline buttons) and tint them with the node's semantic color (e.g., `text-emerald-400`).
 *   **Handle Sizing & Position**: ReactFlow handles should be prominent but clean. Override default classes with `!w-4 !h-4 !border-none`. Because most node contents are wrapped in padded containers (e.g. `p-3` or `p-4`), you MUST use offset classes like `!left-[-24px]` and `!right-[-10px]` to push the handles out so they perfectly align with the outer stroke of the node, overriding React Flow's native inner-padding snap.
+*   **No Boxed Controls**: Controls in the Middle Panel (sliders, toggles, dropdowns) MUST NOT be wrapped in internal containers with their own background colors, paddings, or borders (e.g., avoid `bg-black/20 p-3 rounded border`). They should sit naturally on the node's main background, separated only by standard vertical spacing.
 
 ---
 
@@ -97,7 +98,9 @@ To support the Compound Node (Nested Sub-Graphs) architecture, node execution lo
 
 *   **Logic Extraction**: All API calls, data transformations, and core logic for a node MUST reside in `src/lib/node-executor.ts` as a pure, standalone, asynchronous function (e.g. `executeGeminiRefinerNode`).
 *   **React Integration**: The actual React component (e.g. `GeminiRefinerNode.tsx`) should simply gather inputs, call the executor from `node-executor.ts`, and then update its UI and `data` state with the returned results.
-*   **Compound Nodes**: A `CompoundNode` acts as an automated pipeline. It traverses its `internalNodes` and `internalEdges`, using `executeNode` from `node-executor.ts` to process data from start to finish without needing to render the internal nodes to the canvas. This requires nodes to be able to execute purely based on their configuration `data` and explicit inputs.
+*   **Compound Nodes**: A `CompoundNode` acts as an automated pipeline. It traverses its `internalNodes` and `internalEdges`, using `executeNode` from `node-executor.ts` to process data from start to finish without needing to render the internal nodes to the canvas.
+
+---
 
 ## 9. Rules for Download Buttons
 If a node outputs image(s) and provides an image preview, the download button MUST be placed over the image itself.
@@ -109,3 +112,21 @@ Do NOT place download buttons in the corners of result images or as tiny icons n
 2. Inside the container, add the overlay: `<div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">`
 3. Inside the overlay, add the button (must have `pointer-events-auto`): `<button className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-3 shadow-xl transition-transform hover:scale-105">`
 4. Use the `Download` icon from `lucide-react` (size `w-6 h-6`).
+
+---
+
+## 10. Local Prompt Textfields & Overrides
+For nodes that generate content based on prompts (e.g., Asset Generator, Tileset Generator, General Image Generation):
+1. **Placement**: The local text input field for the prompt MUST be positioned at the very top of the node's GUI, above any other input reference handles or dropdowns.
+2. **Override Behavior**: If a connection is made to the node's `text` handle, the incoming text MUST completely overwrite the text prompt in the local textfield.
+3. **UI Reflection**: When a text connection is present, the local textfield MUST be completely hidden and replaced with a simple text label (e.g., 'Prompt Input' or 'Theme Input') aligned with the handle.
+4. **Execution Logic**: The API payload must use the incoming text exclusively if the handle is connected, completely ignoring the internal `localPrompt` state. This logic must be reflected both in the UI generation functions and the headless executor (`node-executor.ts`).
+
+---
+
+## 11. Edit Buttons
+For nodes that have a dedicated inner workspace (like Image Editor or Compound Nodes):
+1. **Clear Button**: Do not use massive dark overlays or standalone "Double-click to edit" text labels. Use an explicit, clickable button to open the editor.
+2. **Style**: The button MUST be a "clear button". This means it should have a transparent background (`bg-transparent`), a subtle border (`border border-<theme-color>-500/30`), and subtle hover effects (`hover:bg-<theme-color>-500/10`), matching the node's primary theme color.
+3. **Functionality**: A double click on the node background itself should still open the workspace as a fallback shortcut, but the button should be the primary, discoverable UI element for editing.
+4. **Placement**: The 'Open Editor' button MUST be placed near the bottom of the node's main content area. If the node has a primary action button (like 'Run Pipeline'), it should be placed immediately above it. If the node has an Image Preview, the 'Open Editor' button MUST be placed immediately above the image previewer, keeping the preview anchored to the bottom.

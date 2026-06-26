@@ -45,11 +45,11 @@ function WorkspaceContent() {
       </header>
       <div className="flex flex-1 overflow-hidden relative">
         <div className={`${mode === 'node' ? 'flex' : 'hidden'} w-full h-full`}>
-          <Canvas taskId={taskId} />
+          <Canvas taskId={taskId} isActive={mode === 'node'} />
           <Sidebar />
         </div>
         <div className={`${mode === 'map' ? 'flex' : 'hidden'} w-full h-full`}>
-          <MapGeneratorWorkspace taskId={taskId} />
+          <MapGeneratorWorkspace taskId={taskId} isActive={mode === 'map'} />
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { get, set } from "idb-keyval";
 import { MessageSquare, Link2, Palette, Image as ImageIcon, Sparkles, ImageDown, PenTool, Box, Search, Scissors, Eraser, LogIn, LogOut, Layers, Trash2, Download, Upload } from "lucide-react";
 
 const NODE_TYPES = [
@@ -92,6 +93,18 @@ const NODE_TYPES = [
     description: "Generate & extract assets via chromakeying",
   },
   {
+    type: "shadowExtractor",
+    label: "Shadow Extractor",
+    icon: <ImageIcon className="w-5 h-5 text-emerald-400" />,
+    description: "Extract black subject from white background",
+  },
+  {
+    type: "imageEditor",
+    label: "Image Editor",
+    icon: <ImageIcon className="w-5 h-5 text-emerald-400" />,
+    description: "Basic image manipulation",
+  },
+  {
     type: "backgroundRemover",
     label: "Background Remover",
     icon: <Eraser className="w-5 h-5 text-pink-400" />,
@@ -104,13 +117,22 @@ export default function Sidebar() {
   const [activeTab, setActiveTab] = useState<"core" | "custom">("core");
   const [customNodes, setCustomNodes] = useState<any[]>([]);
 
-  const loadCustomNodes = () => {
+  const loadCustomNodes = async () => {
     try {
-      const stored = localStorage.getItem("artist-assistant-custom-nodes");
+      const stored = await get("artist-assistant-custom-nodes");
       if (stored) {
-        setCustomNodes(JSON.parse(stored));
+        setCustomNodes(stored);
       } else {
-        setCustomNodes([]);
+        // Fallback migration from localStorage if exists
+        const localStored = localStorage.getItem("artist-assistant-custom-nodes");
+        if (localStored) {
+          const parsed = JSON.parse(localStored);
+          setCustomNodes(parsed);
+          await set("artist-assistant-custom-nodes", parsed);
+          localStorage.removeItem("artist-assistant-custom-nodes"); // Cleanup
+        } else {
+          setCustomNodes([]);
+        }
       }
     } catch (e) {
       console.error("Failed to load custom nodes", e);
@@ -141,11 +163,11 @@ export default function Sidebar() {
     event.dataTransfer.effectAllowed = "move";
   };
 
-  const deleteCustomNode = (id: string, e: React.MouseEvent) => {
+  const deleteCustomNode = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = customNodes.filter(n => n.id !== id);
     setCustomNodes(updated);
-    localStorage.setItem("artist-assistant-custom-nodes", JSON.stringify(updated));
+    await set("artist-assistant-custom-nodes", updated);
   };
 
   const importCustomNodes = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,7 +194,7 @@ export default function Sidebar() {
           }, []);
           
           setCustomNodes(uniqueNodes);
-          localStorage.setItem("artist-assistant-custom-nodes", JSON.stringify(uniqueNodes));
+          set("artist-assistant-custom-nodes", uniqueNodes).catch(console.error);
         } else {
           alert("Invalid file format. Expected an array of nodes.");
         }

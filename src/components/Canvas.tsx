@@ -18,6 +18,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { Trash2, Save, Download } from "lucide-react";
 import { getTask, saveTaskFlow } from "@/lib/store";
+import { get, set } from "idb-keyval";
 
 import PromptNode from "./nodes/PromptNode";
 import PromptConnectorNode from "./nodes/PromptConnectorNode";
@@ -33,10 +34,14 @@ import IsometricHexSlicerNode from "./nodes/IsometricHexSlicerNode";
 import BackgroundRemoverNode from "./nodes/BackgroundRemoverNode";
 import AssetGeneratorNode from "./nodes/AssetGeneratorNode";
 import TileCutterNode from "./nodes/TileCutterNode";
+import ShadowExtractorNode from "./nodes/ShadowExtractorNode";
+import ImageEditorNode from "./nodes/ImageEditorNode";
 
 import CompoundNode from "./nodes/CompoundNode";
 import GraphInputNode from "./nodes/GraphInputNode";
 import GraphOutputNode from "./nodes/GraphOutputNode";
+
+import ImageEditorWorkspace from "./canvas/ImageEditorWorkspace";
 
 const nodeTypes = {
   prompt: PromptNode,
@@ -53,6 +58,8 @@ const nodeTypes = {
   backgroundRemover: BackgroundRemoverNode,
   assetGenerator: AssetGeneratorNode,
   tileCutter: TileCutterNode,
+  shadowExtractor: ShadowExtractorNode,
+  imageEditor: ImageEditorNode,
   compound: CompoundNode,
   graphInput: GraphInputNode,
   graphOutput: GraphOutputNode,
@@ -60,8 +67,27 @@ const nodeTypes = {
 
 const getId = () => `node_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
+const stripExecutionData = (data: any) => {
+  if (!data) return data;
+  const cleanData = JSON.parse(JSON.stringify(data));
+  delete cleanData.outputImage;
+  delete cleanData.outputImages;
+  delete cleanData.outputText;
+  delete cleanData.outputData;
+  delete cleanData.error;
+  
+  if (cleanData.internalNodes && Array.isArray(cleanData.internalNodes)) {
+    cleanData.internalNodes = cleanData.internalNodes.map((n: any) => ({
+      ...n,
+      data: stripExecutionData(n.data)
+    }));
+  }
+  return cleanData;
+};
+
 interface CanvasProps {
   taskId: string;
+  isActive?: boolean;
 }
 
 const initialNodes: Node[] = [
@@ -108,17 +134,18 @@ const initialEdges: Edge[] = [
   },
 ];
 
-export default function Canvas({ taskId }: CanvasProps) {
+export default function Canvas({ taskId, isActive = true }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [graphPath, setGraphPath] = useState<{ id: string; name: string; type?: string }[]>([]);
+  const [activeImageEditor, setActiveImageEditor] = useState<string | null>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [taskName, setTaskName] = useState("");
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const trashRef = useRef<HTMLDivElement>(null);
 
   // Sub-graph State
-  const [graphPath, setGraphPath] = useState<{ id: string; name: string }[]>([]);
   const rootNodesRef = useRef<Node[]>(initialNodes);
   const rootEdgesRef = useRef<Edge[]>(initialEdges);
 
@@ -134,6 +161,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     nodesRef.current = nodes;
     edgesRef.current = edges;
   }, [nodes, edges]);
+
 
   const saveHistory = useCallback(() => {
     setPast(p => [...p, { nodes: nodesRef.current, edges: edgesRef.current }]);
@@ -235,6 +263,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Must target canvas area or document body to prevent overriding input fields
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (isActive === false) return;
 
       if (e.ctrlKey && e.key.toLowerCase() === 'g') {
         e.preventDefault();
@@ -304,7 +333,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo, setNodes, setEdges, saveHistory]);
+  }, [handleUndo, handleRedo, setNodes, setEdges, saveHistory, isActive]);
 
   useEffect(() => {
     getTask(taskId).then(task => {
@@ -384,12 +413,66 @@ export default function Canvas({ taskId }: CanvasProps) {
       }
       return false;
     };
-    
     updateNodeDeep(cloneRootNodes);
-    return { rootNodes: cloneRootNodes, rootEdges: rootEdgesRef.current };
+    
+    return { rootNodes: cloneRootNodes, rootEdges: rootEdgesRef.current }; // preserve outer edges
   }, [graphPath]);
 
-  const handleSaveToLibrary = useCallback(() => {
+  const openNodeEditor = useCallback((node: Node) => {
+    if (node.type === 'compound') {
+      const { rootNodes, rootEdges } = getFullRootGraph();
+      rootNodesRef.current = rootNodes;
+      if (graphPath.length === 0) {
+         rootEdgesRef.current = rootEdges;
+      }
+      
+      setPast([]);
+      setFuture([]);
+      
+      setGraphPath(prev => [...prev, { id: node.id, name: node.data.label || 'Compound Node' }]);
+      
+      const externalEdges = rootEdges.filter(e => e.target === node.id);
+      const internalNodes = (node.data.internalNodes || []).map((n: Node) => {
+         const cleanNode = n.position ? n : { ...n, position: { x: 0, y: 0 } };
+         if (cleanNode.type === 'graphInput') {
+            const edge = externalEdges.find(e => e.targetHandle === cleanNode.id);
+            if (edge) {
+               const sourceNode = rootNodes.find(rn => rn.id === edge.source);
+               if (sourceNode) {
+                  return {
+                     ...cleanNode,
+                     data: {
+                        ...cleanNode.data,
+                        image: sourceNode.data.image || sourceNode.data.outputImage || sourceNode.data.referenceImage || "",
+                        text: sourceNode.data.text || sourceNode.data.outputText || ""
+                     }
+                  };
+               }
+            }
+         }
+         return cleanNode;
+      });
+      
+      setNodes(internalNodes);
+      setEdges(node.data.internalEdges || []);
+    } else if (node.type === 'imageEditor') {
+      setActiveImageEditor(node.id);
+    }
+  }, [getFullRootGraph, graphPath.length, setNodes, setEdges]);
+
+  useEffect(() => {
+    const handleOpenWorkspace = (e: any) => {
+      const { id } = e.detail;
+      const node = nodesRef.current.find(n => n.id === id);
+      if (node) {
+        openNodeEditor(node);
+      }
+    };
+    window.addEventListener('open-workspace', handleOpenWorkspace);
+    return () => window.removeEventListener('open-workspace', handleOpenWorkspace);
+  }, [openNodeEditor]);
+
+  const handleSaveToLibrary = useCallback(async () => {
     if (graphPath.length === 0) return;
     
     // Ensure we capture the latest state of the internal nodes/edges into the tree
@@ -398,7 +481,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     // Find the compound node we are currently inside
     const targetId = graphPath[graphPath.length - 1].id;
     
-    let currentNode: any = null;
+    let currentNode: Node | null = null;
     
     const findNodeDeep = (nodesArray: Node[]) => {
       for (const n of nodesArray) {
@@ -417,24 +500,32 @@ export default function Canvas({ taskId }: CanvasProps) {
     
     if (currentNode) {
       try {
-        const stored = localStorage.getItem("artist-assistant-custom-nodes");
-        const existingNodes = stored ? JSON.parse(stored) : [];
+        const stored = await get("artist-assistant-custom-nodes");
+        let existingNodes = stored || [];
+        
+        // Handle migration from localStorage if needed
+        if (!stored) {
+           const localStored = localStorage.getItem("artist-assistant-custom-nodes");
+           if (localStored) {
+             existingNodes = JSON.parse(localStored);
+           }
+        }
         
         // Save the compound node. Give it a new unique library ID.
         const libraryNode = {
           id: `lib-node-${Date.now()}`,
-          data: JSON.parse(JSON.stringify(currentNode.data))
+          data: stripExecutionData(currentNode.data)
         };
         
         existingNodes.push(libraryNode);
-        localStorage.setItem("artist-assistant-custom-nodes", JSON.stringify(existingNodes));
+        await set("artist-assistant-custom-nodes", existingNodes);
         
         // Dispatch event to update sidebar
         window.dispatchEvent(new CustomEvent('customNodesUpdated'));
         alert(`Saved "${currentNode.data.label}" to Custom Library!`);
       } catch (err) {
         console.error("Failed to save to library:", err);
-        alert("Failed to save to library. Storage might be full.");
+        alert("Failed to save to library. Storage error.");
       }
     }
   }, [graphPath, getFullRootGraph]);
@@ -464,7 +555,7 @@ export default function Canvas({ taskId }: CanvasProps) {
     if (currentNode) {
       const exportNode = {
         id: `lib-node-${Date.now()}`,
-        data: JSON.parse(JSON.stringify(currentNode.data))
+        data: stripExecutionData(currentNode.data)
       };
       
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify([exportNode], null, 2));
@@ -532,7 +623,27 @@ export default function Canvas({ taskId }: CanvasProps) {
        }
        const targetNode = findNode(rootNodes);
        if (targetNode) {
-          const internalNodes = (targetNode.data.internalNodes || []).map((n: Node) => n.position ? n : { ...n, position: { x: 0, y: 0 } });
+          const externalEdges = rootEdges.filter(e => e.target === targetNode.id);
+          const internalNodes = (targetNode.data.internalNodes || []).map((n: Node) => {
+             const cleanNode = n.position ? n : { ...n, position: { x: 0, y: 0 } };
+             if (cleanNode.type === 'graphInput') {
+                const edge = externalEdges.find(e => e.targetHandle === cleanNode.id);
+                if (edge) {
+                   const sourceNode = rootNodes.find(rn => rn.id === edge.source);
+                   if (sourceNode) {
+                      return {
+                         ...cleanNode,
+                         data: {
+                            ...cleanNode.data,
+                            image: sourceNode.data.image || sourceNode.data.outputImage || sourceNode.data.referenceImage || "",
+                            text: sourceNode.data.text || sourceNode.data.outputText || ""
+                         }
+                      };
+                   }
+                }
+             }
+             return cleanNode;
+          });
           setNodes(internalNodes);
           setEdges(targetNode.data.internalEdges || []);
        }
@@ -540,22 +651,8 @@ export default function Canvas({ taskId }: CanvasProps) {
   }, [getFullRootGraph, graphPath, setNodes, setEdges]);
 
   const onNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
-    if (node.type === 'compound') {
-      const { rootNodes, rootEdges } = getFullRootGraph();
-      rootNodesRef.current = rootNodes;
-      if (graphPath.length === 0) {
-         rootEdgesRef.current = rootEdges;
-      }
-      
-      setPast([]);
-      setFuture([]);
-      
-      setGraphPath(prev => [...prev, { id: node.id, name: node.data.label || 'Compound Node' }]);
-      const internalNodes = (node.data.internalNodes || []).map((n: Node) => n.position ? n : { ...n, position: { x: 0, y: 0 } });
-      setNodes(internalNodes);
-      setEdges(node.data.internalEdges || []);
-    }
-  }, [getFullRootGraph, graphPath.length, setNodes, setEdges]);
+    openNodeEditor(node);
+  }, [openNodeEditor]);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => {
@@ -593,7 +690,8 @@ export default function Canvas({ taskId }: CanvasProps) {
         setNodes(nds => nds.map(n => {
           if (n.id === params.target) {
             const currentHandles = n.data.imageInputs || ["image-0"];
-            if (currentHandles.length < 4) {
+            const maxInputs = n.type === 'imageEditor' ? 50 : 4;
+            if (currentHandles.length < maxInputs) {
               return {
                 ...n,
                 data: {
@@ -801,8 +899,18 @@ export default function Canvas({ taskId }: CanvasProps) {
 
   return (
     <div className="flex-grow h-full relative" ref={reactFlowWrapper}>
-      <ReactFlowProvider>
-        <ReactFlow
+      {activeImageEditor ? (
+        <ImageEditorWorkspace 
+          nodeId={activeImageEditor} 
+          nodes={nodes}
+          edges={edges}
+          setNodes={setNodes}
+          onExit={() => setActiveImageEditor(null)} 
+        />
+      ) : (
+      <>
+        <ReactFlowProvider>
+          <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
@@ -911,6 +1019,8 @@ export default function Canvas({ taskId }: CanvasProps) {
       >
         <Trash2 className={`w-6 h-6 ${isDraggingNode ? "text-red-400 animate-pulse" : "text-gray-500"}`} />
       </div>
+      </>
+      )}
     </div>
   );
 }

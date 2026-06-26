@@ -217,14 +217,19 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
           </div>
         )}
 
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-purple-200/70">
-            Internal Nodes: {data.internalNodes?.length || 0}
-          </div>
-          <div className="text-[10px] text-purple-400/50 italic">
-            Double-click to open
-          </div>
+        <div className="text-xs text-purple-200/70 mb-2">
+          Internal Nodes: {data.internalNodes?.length || 0}
         </div>
+
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent('open-workspace', { detail: { id } }));
+          }}
+          className="w-full py-1.5 mb-2 border border-purple-500/30 text-purple-300 text-xs font-bold uppercase tracking-widest rounded hover:bg-purple-500/10 transition-colors nodrag"
+        >
+          Open Editor
+        </button>
 
         <button 
           onClick={handleRunPipeline}

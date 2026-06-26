@@ -93,8 +93,8 @@ export interface MapState {
   decalOverrides: Record<string, InstanceOverride>;
 }
 
-export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
-  const { state: mapState, set: setMapState, undo, redo, canUndo, canRedo } = useHistory<MapState>({
+export default function MapGeneratorWorkspace({ taskId, isActive = true }: { taskId: string, isActive?: boolean }) {
+  const { state: mapState, set: setMapState, undo, redo, clear, canUndo, canRedo } = useHistory<MapState>({
     groundAsset: null,
     oceanAsset: {
       taskId: 'default',
@@ -175,7 +175,7 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
             islandName: 'Island_1'
           };
         }
-        setMapState({
+        clear({
           groundAsset: task.mapData.groundAsset || null,
           oceanAsset: task.mapData.oceanAsset || {
             taskId: 'default',
@@ -199,18 +199,19 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
       setIsLoaded(true);
     };
     loadData();
-  }, [taskId, setMapState]);
+  }, [taskId, clear]);
 
   useEffect(() => {
     if (!isLoaded || !taskId) return;
     const saveTimer = setTimeout(() => {
-      saveMapData(taskId, mapState);
+      saveMapData(taskId, { ...mapState, levels });
     }, 500); // Debounce save
     return () => clearTimeout(saveTimer);
-  }, [mapState, isLoaded, taskId]);
+  }, [mapState, levels, isLoaded, taskId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isActive === false) return;
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undo();
@@ -239,7 +240,7 @@ export default function MapGeneratorWorkspace({ taskId }: { taskId: string }) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo, activeSelection, setMapState]);
+  }, [undo, redo, activeSelection, setMapState, isActive]);
 
   const setGroundAsset = useCallback((val: any) => setMapState(p => ({ ...p, groundAsset: typeof val === 'function' ? val(p.groundAsset) : val })), [setMapState]);
   const setOceanAsset = useCallback((val: any) => setMapState(p => ({ ...p, oceanAsset: typeof val === 'function' ? val(p.oceanAsset) : val })), [setMapState]);

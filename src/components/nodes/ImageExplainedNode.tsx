@@ -10,6 +10,7 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
   const [showRawRequest, setShowRawRequest] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>(data.model || "gemini-2.5-flash");
+  const [wordCountLimit, setWordCountLimit] = useState<number>(data.wordCountLimit || 500);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [textProvider, setTextProvider] = useState<"plenxai" | "google">("plenxai");
   
@@ -23,6 +24,13 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
   }, []);
 
   const activeModels = textProvider === "google" ? GOOGLE_MODELS : TEXT_MODELS;
+
+  const handleWordCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseInt(e.target.value, 10);
+    if (isNaN(val)) return;
+    setWordCountLimit(val);
+    setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, wordCountLimit: val } } : n));
+  };
 
   const handleExplain = async () => {
     const nodes = getNodes();
@@ -53,7 +61,7 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
     try {
       const { executeImageExplainedNode } = await import("@/lib/node-executor");
       const result = await executeImageExplainedNode(
-        { ...data, model: selectedModel }, 
+        { ...data, model: selectedModel, wordCountLimit }, 
         { textInputs: [], imageInputs }, 
         {}
       );
@@ -74,7 +82,7 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
     }
   };
 
-  const generatedPrompt = `Describe what is going on in these image(s) in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image. You must write approximately 1000 characters for each image.`;
+  const generatedPrompt = `Describe what is going on in these image(s) in detail. Focus on composition, character/object detail, and storytelling should any of these elements be present in the image. You must write approximately ${wordCountLimit} words for each image.`;
 
   return (
     <div className={`w-80 bg-[#1a1525] rounded-lg shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-all duration-200 relative ${
@@ -136,6 +144,17 @@ export default function ImageExplainedNode({ id, data, selected }: { id: string;
               ))}
             </div>
           )}
+        </div>
+
+        {/* Word Count Limit */}
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-emerald-400/60 font-bold mb-1 block">Word Count Limit</label>
+          <input 
+            type="number"
+            value={wordCountLimit}
+            onChange={handleWordCountChange}
+            className="nodrag w-full bg-black/40 text-emerald-100 text-xs border border-emerald-500/20 rounded px-3 py-2 focus:outline-none focus:border-emerald-500/40 transition-colors"
+          />
         </div>
 
         {/* Raw Request Toggle */}

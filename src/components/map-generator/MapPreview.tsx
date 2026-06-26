@@ -323,6 +323,77 @@ export default function MapPreview({
     rawGridLevels[0] = baseGrid;
 
     // Extract all procedural objects
+    // --- PRECOMPUTE TAPER AND FOAM TILES FOR ALL LEVEL 0 CELLS ---
+    if (parameters.oceanTaperLevels > 0 || parameters.oceanAddFoam) {
+      for (let r = 0; r < parameters.canvasHeight; r++) {
+        for (let c = 0; c < parameters.canvasWidth; c++) {
+          const cell = baseGrid[r]?.[c];
+          if (!cell) continue;
+
+          // Precompute taperTile
+          if (parameters.oceanTaperLevels > 0) {
+            const maxLvl = parameters.oceanTaperLevels;
+            for (let lvl = 1; lvl <= maxLvl + 1; lvl++) {
+              if ((cell.distance || 0) >= lvl) {
+                let maskToDraw: string | null = null;
+                let isUniformDarken = false;
+
+                if ((cell.distance || 0) > lvl) {
+                  isUniformDarken = true;
+                  cell.taperTile = `Lvl${lvl}_Tile_Center`;
+                } else if (lvl > maxLvl) {
+                  maskToDraw = 'Tile_Center';
+                } else {
+                  const isCurrent = (d: number | undefined) => (d !== undefined && d <= lvl) ? 1 : 0;
+                  const getDist = (cx: number, cy: number) => {
+                    if (cx < 0 || cx >= parameters.canvasWidth || cy < 0 || cy >= parameters.canvasHeight) return 999;
+                    return baseGrid[cy]?.[cx]?.distance || 0;
+                  };
+
+                  const nb = getNeighbors(c, r, parameters.canvasWidth, parameters.canvasHeight, getDist, isCurrent, 999);
+
+                  if (nb.n === 0 && nb.e === 0 && nb.s === 0 && nb.w === 0) {
+                    maskToDraw = 'Tile_Center';
+                  } else if (nb.n === 1 && nb.e === 1 && nb.s === 1 && nb.w === 1) {
+                    const tileIdResult = TerrainGenerator.getTileId(nb.n, nb.e, nb.s, nb.w, nb.ne, nb.se, nb.sw, nb.nw);
+                    if (tileIdResult) maskToDraw = `Tile_${formatTerrainTileId(tileIdResult)}`;
+                  } else {
+                    const tileIdResult = TerrainGenerator.getTileId(nb.n, nb.e, nb.s, nb.w, 1, 1, 1, 1);
+                    if (tileIdResult) maskToDraw = `Tile_${formatTerrainTileId(tileIdResult)}`;
+                  }
+                }
+
+                if (!isUniformDarken && maskToDraw) {
+                  cell.taperTile = `Lvl${lvl}_${maskToDraw}`;
+                }
+              }
+            }
+          }
+
+          // Precompute foamTile
+          if (parameters.oceanAddFoam) {
+            if ((cell as any).rawDistance === 1) {
+              const getRawDist = (cx: number, cy: number) => {
+                if (cx < 0 || cx >= parameters.canvasWidth || cy < 0 || cy >= parameters.canvasHeight) return 2;
+                return (baseGrid[cy]?.[cx] as any)?.rawDistance || 0;
+              };
+
+              const isCurrent = (d: number | undefined) => (d !== undefined && d <= 1) ? 1 : 0;
+              const nb = getNeighbors(c, r, parameters.canvasWidth, parameters.canvasHeight, getRawDist, isCurrent, (cell as any).rawDistance || 0);
+              const foamMaskToDraw = getFoamMaskToDraw(nb);
+
+              if (foamMaskToDraw && foamMaskToDraw !== 'Tile_Center') {
+                cell.foamTile = foamMaskToDraw;
+              }
+            } else if (cell.distance === 0) {
+              cell.foamTile = 'Tile_Center';
+            }
+          }
+        }
+      }
+    }
+
+    // Extract all procedural objects
     const allObjects: PlacedObject[] = [];
     for (const level of levels) {
       const rawGrid = rawGridLevels[level];
@@ -939,10 +1010,6 @@ export default function MapPreview({
 
             if ((cell.distance || 0) > lvl) {
               isUniformDarken = true;
-              cell.taperTile = `Lvl${lvl}_Tile_Center`;
-              if (gridLevels[0]?.[cell.row]?.[cell.col]) {
-                gridLevels[0][cell.row][cell.col].taperTile = cell.taperTile;
-              }
             } else if (lvl > maxLvl) {
               maskToDraw = 'Tile_Center';
             } else {
@@ -980,10 +1047,6 @@ export default function MapPreview({
               ctx.fill();
               ctx.restore();
             } else if (maskToDraw) {
-              cell.taperTile = `Lvl${lvl}_${maskToDraw}`;
-              if (gridLevels[0]?.[cell.row]?.[cell.col]) {
-                gridLevels[0][cell.row][cell.col].taperTile = cell.taperTile;
-              }
               if (parameters.oceanTaperLevels > 0) {
                 const maskImg = images[`mask_${maskToDraw}`];
                 if (maskImg) {
@@ -1012,10 +1075,6 @@ export default function MapPreview({
         foamMaskToDraw = getFoamMaskToDraw(nb);
 
         if (foamMaskToDraw && foamMaskToDraw !== 'Tile_Center') {
-          cell.foamTile = foamMaskToDraw;
-          if (gridLevels[0]?.[cell.row]?.[cell.col]) {
-            gridLevels[0][cell.row][cell.col].foamTile = foamMaskToDraw;
-          }
           const foamImg = images[`foam_${foamMaskToDraw}`];
           if (foamImg) {
             ctx.save();
@@ -1028,10 +1087,6 @@ export default function MapPreview({
 
       // [FOAM LAYER 2: INNER GAP FILLER]
       if (cell.layer === 0 && parameters.oceanAddFoam && cell.distance === 0) {
-        cell.foamTile = 'Tile_Center';
-        if (gridLevels[0]?.[cell.row]?.[cell.col]) {
-          gridLevels[0][cell.row][cell.col].foamTile = 'Tile_Center';
-        }
         const foamImg = images['foam_Tile_Center'];
         if (foamImg) {
           ctx.save();

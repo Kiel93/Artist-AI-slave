@@ -29,7 +29,11 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
   const { getNodes, getEdges, setNodes } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
   const edgesReactFlow = useEdges();
-  const hasTextConnection = edgesReactFlow.some(e => e.target === id && e.targetHandle === 'text');
+  const incomingTextEdge = edgesReactFlow.find(e => e.target === id && e.targetHandle === 'text');
+  const hasTextConnection = !!incomingTextEdge;
+  const incomingNode = incomingTextEdge ? getNodes().find(n => n.id === incomingTextEdge.source) : null;
+  const incomingText = incomingNode ? (incomingNode.data.text || incomingNode.data.outputText || "") : "";
+  const displayPrompt = hasTextConnection ? incomingText : localPrompt;
 
   useEffect(() => {
     updateNodeInternals(id);
@@ -62,7 +66,9 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
       }
     });
 
-    if (!hasTextConnectionGen && localPrompt) {
+    if (hasTextConnectionGen && incomingText) {
+      promptParts.push(incomingText);
+    } else if (!hasTextConnectionGen && localPrompt) {
       promptParts.push(localPrompt);
     }
 
@@ -244,7 +250,7 @@ View: Strict 30-degree isometric.`;
           <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
           {!hasTextConnection ? (
             <textarea
-              className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
+              className="nodrag text-xs w-full bg-black/40 p-2 rounded border focus:outline-none resize-none text-gray-200 border-indigo-500/20 focus:border-indigo-500/60"
               placeholder="Enter theme (e.g., Lava rocks, glowing magma...)"
               rows={3}
               value={localPrompt}

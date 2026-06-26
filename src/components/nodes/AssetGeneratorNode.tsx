@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Handle, Position, useReactFlow } from "reactflow";
+import { Handle, Position, useReactFlow, useEdges } from "reactflow";
 import { ImageIcon, RefreshCw, Play, AlertCircle, ChevronDown, Eye, PenTool, Download } from "lucide-react";
 import { queueImageGen, getTaskStatus, uploadMediaDirect, fetchNodePrompt } from "@/lib/plenxai";
 
@@ -33,6 +33,12 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(data.generatedUrl || null);
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
+  const edgesReactFlow = useEdges();
+  const incomingTextEdge = edgesReactFlow.find(e => e.target === id && e.targetHandle === 'text');
+  const hasTextConnection = !!incomingTextEdge;
+  const incomingNode = incomingTextEdge ? getNodes().find(n => n.id === incomingTextEdge.source) : null;
+  const incomingText = incomingNode ? (incomingNode.data.text || incomingNode.data.outputText || "") : "";
+  const displayPrompt = hasTextConnection ? incomingText : localPrompt;
 
   const performChromaKey = (generatedImgUrl: string, currentThreshold: number = threshold): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -168,9 +174,8 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
     const edges = getEdges();
     const incomingEdges = edges.filter(e => e.target === id);
     
-    const promptParts: string[] = [];
-    if (localPrompt) promptParts.push(localPrompt);
-
+    let hasTextConnectionGen = false;
+    let textInput = "";
     let styleInput = "";
     let inputImageUrl = "";
     let secondaryImageUrl = "";
@@ -178,8 +183,8 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.text|| "";
-        if (text) promptParts.push(text);
+        hasTextConnectionGen = true;
+        textInput = sourceNode.data.text || sourceNode.data.outputText || "";
       }
       if (edge.targetHandle === 'style') {
         styleInput = sourceNode.data.text|| "";
@@ -198,7 +203,7 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
       return;
     }
 
-    const objectPrompt = promptParts.join(", ") || "object";
+    const objectPrompt = hasTextConnectionGen ? textInput : (localPrompt || "object");
     const styleString = styleInput ? ` Artstyle: ${styleInput}` : "";
     
     let baseApiPrompt = await fetchNodePrompt('AssetGeneratorNode');
@@ -372,16 +377,22 @@ Spec: resolution:{resolution}. ratio 1:1.`;
       <div className="p-4 space-y-3">
         <div className="relative">
           <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
-          <textarea
-            className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
-            placeholder="e.g. 'A wooden crate', 'A patch of green grass'"
-            rows={2}
-            value={localPrompt}
-            onChange={(e) => {
-              setLocalPrompt(e.target.value);
-              setNodes((nds) => nds.map((n) => n.id === id ? { ...n, data: { ...n.data, localPrompt: e.target.value } } : n));
-            }}
-          />
+          {!hasTextConnection ? (
+            <textarea
+              className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
+              placeholder="e.g. 'A wooden crate', 'A patch of green grass'"
+              rows={2}
+              value={localPrompt}
+              onChange={(e) => {
+                setLocalPrompt(e.target.value);
+                setNodes((nds) => nds.map((n) => n.id === id ? { ...n, data: { ...n.data, localPrompt: e.target.value } } : n));
+              }}
+            />
+          ) : (
+            <div className="flex items-center h-6">
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Prompt Input</span>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-1">

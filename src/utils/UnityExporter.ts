@@ -106,14 +106,65 @@ export async function exportToUnity(params: UnityExportParams): Promise<Blob> {
           const layer1 = gridLevels['1'];
           const h = layer1.length;
           const w = layer1[0].length;
+          
+          const heightMap: Record<string, number> = {};
+          const levels = Object.keys(gridLevels).map(Number).filter(l => !isNaN(l));
+          for (const level of levels) {
+            const gridLvl = gridLevels[level];
+            if (!gridLvl) continue;
+            for (let y = 0; y < gridLvl.length; y++) {
+              for (let x = 0; x < gridLvl[y].length; x++) {
+                if (gridLvl[y][x].isLand) heightMap[`${x},${y}`] = level;
+              }
+            }
+          }
+
+          const checkSubtileBuildable = (cx: number, cy: number, dx: number, dy: number, layer: number) => {
+            const hSame = heightMap[`${cx},${cy}`];
+            if (hSame !== undefined && hSame > layer) return false;
+
+            const hRight = heightMap[`${cx},${cy - 1}`];
+            if (hRight !== undefined && hRight > layer) return false;
+
+            const hUnder = heightMap[`${cx - 1},${cy}`];
+            if (hUnder !== undefined && hUnder > layer) return false;
+
+            const hBottomRight = heightMap[`${cx - 1},${cy - 1}`];
+            if (hBottomRight !== undefined && hBottomRight > layer) return false;
+
+            const layerGrid = gridLevels[layer];
+            if (!layerGrid) return false;
+            const isWater = (nx: number, ny: number) => {
+              return !layerGrid[ny] || !layerGrid[ny][nx] || !layerGrid[ny][nx].isLand;
+            };
+
+            if (dy === 0 && isWater(cx, cy - 1)) return false;
+            if (dy === 2 && isWater(cx, cy + 1)) return false;
+            if (dx === 0 && isWater(cx - 1, cy)) return false;
+            if (dx === 2 && isWater(cx + 1, cy)) return false;
+
+            if (dx === 0 && dy === 0 && isWater(cx - 1, cy - 1)) return false;
+            if (dx === 2 && dy === 0 && isWater(cx + 1, cy - 1)) return false;
+            if (dx === 0 && dy === 2 && isWater(cx - 1, cy + 1)) return false;
+            if (dx === 2 && dy === 2 && isWater(cx + 1, cy + 1)) return false;
+
+            return true;
+          };
 
           for (let row = 0; row < h * 3; row++) {
             const rowData: number[] = [];
             const tileRow = Math.floor(row / 3);
+            const dy = row % 3;
             for (let col = 0; col < w * 3; col++) {
               const tileCol = Math.floor(col / 3);
+              const dx = col % 3;
               const isLand = layer1[tileRow]?.[tileCol]?.isLand;
-              rowData.push(isLand ? 1 : 0);
+              if (!isLand) {
+                rowData.push(0);
+              } else {
+                const isBuildable = checkSubtileBuildable(tileCol, tileRow, dx, dy, 1);
+                rowData.push(isBuildable ? 1 : 0);
+              }
             }
             buildable.push({ columns: rowData });
           }
@@ -272,7 +323,11 @@ export async function exportToUnity(params: UnityExportParams): Promise<Blob> {
       zip.file('MapConfig.json', JSON.stringify(mapConfig, null, 2));
 
       // Embed Editor Script
-      const csharpScript = `using UnityEngine;
+      const csharpScript = `
+
+
+
+using UnityEngine;
 using UnityEditor;
 using System.IO;
 using System.Collections.Generic;
@@ -287,6 +342,38 @@ public class ApplyMapConfigEditor : EditorWindow
     private Dictionary<string, GameObject> blueprintMappings = new Dictionary<string, GameObject>();
     private GameObject defaultBlueprint;
     private Vector2 scrollPos;
+    public UnityEditor.SceneAsset templateScene;
+    public string mapId = "11";
+
+    private static Dictionary<string, int> prefixMaxNumbers = new Dictionary<string, int>();
+
+    public static string GetNextAutoIncrementName(string prefix)
+    {
+        if (!prefixMaxNumbers.ContainsKey(prefix))
+        {
+            string[] guids = AssetDatabase.FindAssets("t:Prefab");
+            int maxNum = 0;
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (name.StartsWith(prefix))
+                {
+                    string remainder = name.Substring(prefix.Length);
+                    var match = System.Text.RegularExpressions.Regex.Match(remainder, @"^(\\d+)");
+                    if (match.Success)
+                    {
+                        int num = int.Parse(match.Groups[1].Value);
+                        if (num > maxNum) maxNum = num;
+                    }
+                }
+            }
+            prefixMaxNumbers[prefix] = maxNum;
+        }
+        
+        prefixMaxNumbers[prefix]++;
+        return prefix + prefixMaxNumbers[prefix].ToString();
+    }
 
     private Tilemap groundTilemap;
     private Tilemap oceanTilemap;
@@ -294,22 +381,64 @@ public class ApplyMapConfigEditor : EditorWindow
     private Tilemap buildableGridTilemap;
     private Tilemap prefabHolderTilemap;
 
-    [MenuItem("Tools/Farm Adventure/Apply Map Config Edits")]
+    [MenuItem("Tools/Farm Adventure/Apply Map Config Edits", false, 20)]
     public static void ShowWindow()
     {
         GetWindow<ApplyMapConfigEditor>("Apply Map Config");
     }
 
-    private void OnGUI()
+    public void ForceReload()
     {
-        GUILayout.Label("Apply Asset Footprints & Buildable Zone", EditorStyles.boldLabel);
-        EditorGUI.BeginChangeCheck();
-        mapConfigFile = (TextAsset)EditorGUILayout.ObjectField("MapConfig JSON", mapConfigFile, typeof(TextAsset), false);
-        if (EditorGUI.EndChangeCheck() && mapConfigFile != null)
+        if (mapConfigFile != null)
         {
             LoadConfig();
         }
+    }
 
+    private void OnEnable()
+    {
+        if (defaultBlueprint == null)
+        {
+            string[] defaultGuids = AssetDatabase.FindAssets("Blueprint_Mineral t:Prefab");
+            if (defaultGuids.Length > 0)
+            {
+                defaultBlueprint = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(defaultGuids[0]));
+            }
+        }
+
+        ForceReload();
+    }
+
+    private void OnGUI()
+    {
+        GUILayout.Label("Apply Asset Footprints & Buildable Zone", EditorStyles.boldLabel);
+        
+        mapId = EditorGUILayout.TextField("Map ID (e.g. 11)", mapId);
+        GUILayout.Space(5);
+
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.BeginHorizontal();
+        mapConfigFile = (TextAsset)EditorGUILayout.ObjectField("MapConfig JSON", mapConfigFile, typeof(TextAsset), false);
+        if (GUILayout.Button("Reload", GUILayout.Width(60)))
+        {
+            ForceReload();
+        }
+        EditorGUILayout.EndHorizontal();
+        
+        if (EditorGUI.EndChangeCheck() && mapConfigFile != null)
+        {
+            ForceReload();
+        }
+
+        GUILayout.Space(10);
+        
+        templateScene = (UnityEditor.SceneAsset)EditorGUILayout.ObjectField("Template Map Scene", templateScene, typeof(UnityEditor.SceneAsset), false);
+        GUILayout.Label("Template scene provides base elements like Main Camera, Managers, EventSystem, etc.", EditorStyles.miniLabel);
+
+        GUILayout.Space(10);
+        
+        defaultBlueprint = (GameObject)EditorGUILayout.ObjectField("Default Blueprint (Fallback)", defaultBlueprint, typeof(GameObject), false);
+        
         GUILayout.Space(10);
         
         if (missingPrefabs.Count > 0)
@@ -317,7 +446,6 @@ public class ApplyMapConfigEditor : EditorWindow
             GUILayout.Label("Missing Prefabs Detected (Map to Blueprints)", EditorStyles.boldLabel);
             
             EditorGUILayout.BeginHorizontal();
-            defaultBlueprint = (GameObject)EditorGUILayout.ObjectField("Default Blueprint", defaultBlueprint, typeof(GameObject), false);
             if (GUILayout.Button("Apply Default to All", GUILayout.Width(130))) {
                 foreach (string id in missingPrefabs) {
                     if (defaultBlueprint != null) blueprintMappings[id] = defaultBlueprint;
@@ -362,7 +490,14 @@ public class ApplyMapConfigEditor : EditorWindow
                 if (!missingPrefabs.Contains(item.id))
                 {
                     string[] prefabGuids = AssetDatabase.FindAssets(item.id + " t:Prefab");
-                    if (prefabGuids.Length == 0)
+                    bool foundExact = false;
+                    foreach (string guid in prefabGuids) {
+                        if (System.IO.Path.GetFileNameWithoutExtension(AssetDatabase.GUIDToAssetPath(guid)) == item.id) {
+                            foundExact = true;
+                            break;
+                        }
+                    }
+                    if (!foundExact)
                     {
                         missingPrefabs.Add(item.id);
                         if (mineralBlueprint != null) {
@@ -394,6 +529,87 @@ public class ApplyMapConfigEditor : EditorWindow
         }
         
         return tm;
+    }
+
+    private void CopyBaseHierarchyFromTemplate()
+    {
+        if (templateScene == null) return;
+
+        string templatePath = AssetDatabase.GetAssetPath(templateScene);
+        if (string.IsNullOrEmpty(templatePath)) return;
+
+        UnityEngine.SceneManagement.Scene activeScene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+        if (activeScene.path == templatePath) return; // Z Do not copy from self
+
+        UnityEngine.SceneManagement.Scene tempScene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(templatePath, UnityEditor.SceneManagement.OpenSceneMode.Additive);
+        if (tempScene.IsValid())
+        {
+            GameObject[] rootObjects = tempScene.GetRootGameObjects();
+            foreach (GameObject go in rootObjects)
+            {
+                // Skip objects generated by the tool or map-specific objects
+                bool skip = false;
+                string goName = go.name;
+                
+                // Blacklist of map-specific items that should not be copied to a new map
+                if (goName.StartsWith("Background_") || 
+                    goName.Contains("Cloud") || 
+                    goName == "CameraRender" || 
+                    goName == "TargetPathFinder" ||
+                    goName == "Cupid" || goName == "Frank") 
+                {
+                    skip = true;
+                }
+                else
+                {
+                    // Skip if active scene already has an object with this exact name
+                    foreach (GameObject activeGo in activeScene.GetRootGameObjects())
+                    {
+                        if (activeGo.name == goName)
+                        {
+                            skip = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (skip)
+                {
+                    DestroyImmediate(go);
+                }
+                else if (goName == "Grid" || goName == "Gridx3")
+                {
+                    // Keep Grids to preserve components like GridBuildSystem, but clear all tiles and children
+                    UnityEngine.Tilemaps.Tilemap[] tilemaps = go.GetComponentsInChildren<UnityEngine.Tilemaps.Tilemap>(true);
+                    foreach (var tm in tilemaps)
+                    {
+                        tm.ClearAllTiles();
+                    }
+
+                    // Clear all instantiated objects inside any child layer of Grid/Gridx3 (e.g. inside BuildingObject, Farm, PrefabHolder)
+                    foreach (Transform child in go.transform)
+                    {
+                        for (int i = child.childCount - 1; i >= 0; i--)
+                        {
+                            DestroyImmediate(child.GetChild(i).gameObject);
+                        }
+                    }
+                }
+                else if (goName == "TutorialController")
+                {
+                    // Clean up map-specific clouds from TutorialController
+                    for (int i = go.transform.childCount - 1; i >= 0; i--)
+                    {
+                        Transform child = go.transform.GetChild(i);
+                        if (child.name != "TutCanvas" && child.name != "CloudTut_1")
+                        {
+                            DestroyImmediate(child.gameObject);
+                        }
+                    }
+                }
+            }
+            UnityEngine.SceneManagement.SceneManager.MergeScenes(tempScene, activeScene);
+        }
     }
 
     private void SetupHierarchies()
@@ -429,7 +645,16 @@ public class ApplyMapConfigEditor : EditorWindow
             grid.cellSize = new Vector3(1.0f, 0.5f, 1.0f);
         }
 
-        buildableGridTilemap = GetOrCreateTilemap(gridObj, "BuildableGrid", 2);
+        // Find existing Buildable tilemap under Grid
+        Transform buildableTransform = gridObj.transform.Find("Buildable");
+        if (buildableTransform != null)
+        {
+            buildableGridTilemap = buildableTransform.GetComponent<Tilemap>();
+        }
+        if (buildableGridTilemap == null)
+        {
+            buildableGridTilemap = GetOrCreateTilemap(gridObj, "Buildable", 2);
+        }
         prefabHolderTilemap = GetOrCreateTilemap(gridObj, "PrefabHolder", 0, "Foreground");
     }
 
@@ -438,6 +663,7 @@ public class ApplyMapConfigEditor : EditorWindow
         WebMapConfig config = JsonUtility.FromJson<WebMapConfig>(json);
         if (config == null) return;
 
+        CopyBaseHierarchyFromTemplate();
         SetupHierarchies();
 
         // 1. Apply Footprints and Scale to Prefabs
@@ -480,25 +706,23 @@ public class ApplyMapConfigEditor : EditorWindow
         {
             buildableGridTilemap.ClearAllTiles();
             
-            TileBase buildableTileBase = null;
-            string[] tileGuids = AssetDatabase.FindAssets("Buildable t:Tile");
-            if (tileGuids.Length > 0) buildableTileBase = AssetDatabase.LoadAssetAtPath<TileBase>(AssetDatabase.GUIDToAssetPath(tileGuids[0]));
-            else {
-                string[] spriteGuids = AssetDatabase.FindAssets("Buildable t:Sprite");
-                if (spriteGuids.Length > 0) {
-                    Sprite s = AssetDatabase.LoadAssetAtPath<Sprite>(AssetDatabase.GUIDToAssetPath(spriteGuids[0]));
-                    if (s != null) {
-                        Tile newTile = ScriptableObject.CreateInstance<Tile>();
-                        newTile.sprite = s;
-                        if (!AssetDatabase.IsValidFolder("Assets/Tiles")) AssetDatabase.CreateFolder("Assets", "Tiles");
-                        AssetDatabase.CreateAsset(newTile, "Assets/Tiles/Buildable.asset");
-                        buildableTileBase = newTile;
-                    }
-                }
+            // Use existing Moveable tile from TileMap/Tiles/Movement
+            TileBase buildableTileBase = AssetDatabase.LoadAssetAtPath<TileBase>("Assets/TileMap/Tiles/Movement/Moveable.asset");
+            if (buildableTileBase == null)
+            {
+                // Fallback: search by name
+                string[] tileGuids = AssetDatabase.FindAssets("Moveable t:Tile");
+                if (tileGuids.Length > 0) buildableTileBase = AssetDatabase.LoadAssetAtPath<TileBase>(AssetDatabase.GUIDToAssetPath(tileGuids[0]));
+            }
+            
+            if (buildableTileBase == null)
+            {
+                Debug.LogError("[ApplyMapConfig] Cannot find 'Moveable' tile at Assets/TileMap/Tiles/Movement/Moveable.asset! Buildable grid will not be painted.");
             }
 
             if (buildableTileBase != null) {
                 int height = config.buildableGrid.Count;
+                int paintedCount = 0;
                 for (int y = 0; y < height; y++)
                 {
                     int width = config.buildableGrid[y].columns.Count;
@@ -508,9 +732,11 @@ public class ApplyMapConfigEditor : EditorWindow
                         {
                             Vector3Int pos = new Vector3Int(x, y, 0);
                             buildableGridTilemap.SetTile(pos, buildableTileBase);
+                            paintedCount++;
                         }
                     }
                 }
+                Debug.Log($"[ApplyMapConfig] Painted {paintedCount} buildable subtiles onto Grid/Buildable tilemap.");
             }
         }
 
@@ -578,14 +804,21 @@ public class ApplyMapConfigEditor : EditorWindow
                 else
                 {
                     string[] prefabGuids = AssetDatabase.FindAssets(item.id + " t:Prefab");
-                    if (prefabGuids.Length > 0)
-                    {
-                        string path = AssetDatabase.GUIDToAssetPath(prefabGuids[0]);
-                        prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    string exactPath = null;
+                    foreach (string guid in prefabGuids) {
+                        string p = AssetDatabase.GUIDToAssetPath(guid);
+                        if (System.IO.Path.GetFileNameWithoutExtension(p) == item.id) {
+                            exactPath = p;
+                            break;
+                        }
                     }
-                    else if (blueprintMappings.ContainsKey(item.id) && blueprintMappings[item.id] != null)
+                    if (exactPath != null)
                     {
-                        GameObject blueprintTemplate = blueprintMappings[item.id];
+                        prefab = AssetDatabase.LoadAssetAtPath<GameObject>(exactPath);
+                    }
+                    else if ((blueprintMappings.ContainsKey(item.id) && blueprintMappings[item.id] != null) || defaultBlueprint != null)
+                    {
+                        GameObject blueprintTemplate = blueprintMappings.ContainsKey(item.id) && blueprintMappings[item.id] != null ? blueprintMappings[item.id] : defaultBlueprint;
                         
                         string[] spriteGuids = AssetDatabase.FindAssets(item.id + " t:Sprite");
                         
@@ -624,18 +857,48 @@ public class ApplyMapConfigEditor : EditorWindow
                             Sprite s = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath);
                             if (s != null)
                             {
+                                string finalName = item.id;
+                                
+                                // ID is just item.id since Rename Tool handles the auto-increment naming now.
+
                                 GameObject cloned = (GameObject)PrefabUtility.InstantiatePrefab(blueprintTemplate);
                                 
                                 SpriteRenderer sr = cloned.GetComponentInChildren<SpriteRenderer>();
                                 if (sr == null) sr = cloned.AddComponent<SpriteRenderer>();
                                 sr.sprite = s;
-                                
-                                if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
+
+                                // Update Id property on any script (like Mineral)
+                                MonoBehaviour[] monos = cloned.GetComponentsInChildren<MonoBehaviour>();
+                                foreach (var mono in monos)
                                 {
-                                    AssetDatabase.CreateFolder("Assets", "Prefabs");
+                                    if (mono == null) continue;
+                                    SerializedObject so = new SerializedObject(mono);
+                                    SerializedProperty idProp = so.FindProperty("Id");
+                                    if (idProp == null) idProp = so.FindProperty("id");
+                                    
+                                    if (idProp != null && idProp.propertyType == SerializedPropertyType.String)
+                                    {
+                                        idProp.stringValue = finalName;
+                                        so.ApplyModifiedProperties();
+                                    }
                                 }
                                 
-                                WebAssetDef def = config.assetDefinitions.Find(d => d.id == item.id);
+                                string prefabFolder = $"Assets/Prefabs/Gameplay/Mineral/Map_{mapId}";
+                                if (finalName.StartsWith("b_")) prefabFolder = $"Assets/Prefabs/Gameplay/Building/Map_{mapId}";
+                                else if (finalName.StartsWith("ob_")) prefabFolder = $"Assets/Prefabs/Gameplay/Obstacle/Map_{mapId}";
+                                
+                                string[] folders = prefabFolder.Split('/');
+                                string currentPath = folders[0];
+                                for (int i = 1; i < folders.Length; i++)
+                                {
+                                    if (!AssetDatabase.IsValidFolder(currentPath + "/" + folders[i]))
+                                    {
+                                        AssetDatabase.CreateFolder(currentPath, folders[i]);
+                                    }
+                                    currentPath += "/" + folders[i];
+                                }
+                                
+                                WebAssetDef def = config.assetDefinitions.Find(d => d.id == finalName);
                                 if (def != null)
                                 {
                                     GridObject go = cloned.GetComponent<GridObject>();
@@ -654,7 +917,7 @@ public class ApplyMapConfigEditor : EditorWindow
                                     }
                                 }
 
-                                prefab = PrefabUtility.SaveAsPrefabAsset(cloned, "Assets/Prefabs/" + item.id + ".prefab");
+                                prefab = PrefabUtility.SaveAsPrefabAsset(cloned, prefabFolder + "/" + finalName + ".prefab");
                                 DestroyImmediate(cloned);
                                 
                                 missingPrefabs.Remove(item.id);
@@ -670,37 +933,115 @@ public class ApplyMapConfigEditor : EditorWindow
 
                 if (prefab != null)
                 {
-                    string tilePath = "Assets/Tiles/PrefabTiles";
-                    if (!AssetDatabase.IsValidFolder("Assets/Tiles"))
+                    if (!item.id.StartsWith("b_"))
                     {
-                        AssetDatabase.CreateFolder("Assets", "Tiles");
-                    }
-                    if (!AssetDatabase.IsValidFolder(tilePath))
-                    {
-                        AssetDatabase.CreateFolder("Assets/Tiles", "PrefabTiles");
-                    }
+                        string tilePath = $"Assets/MapEditor/Editor/Tiles/Mineral/Map_{mapId}";
+                        if (item.id.StartsWith("ob_")) tilePath = $"Assets/MapEditor/Editor/Tiles/Obstacle/Map_{mapId}";
 
-                    string assetPath = tilePath + "/" + prefab.name + "_Tile.asset";
-                    Tile prefabTile = AssetDatabase.LoadAssetAtPath<Tile>(assetPath);
-                    if (prefabTile == null)
-                    {
-                        prefabTile = ScriptableObject.CreateInstance<Tile>();
-                        prefabTile.gameObject = prefab;
-                        AssetDatabase.CreateAsset(prefabTile, assetPath);
-                    }
-                    else if (prefabTile.gameObject != prefab)
-                    {
-                        prefabTile.gameObject = prefab;
-                        EditorUtility.SetDirty(prefabTile);
-                        AssetDatabase.SaveAssets();
+                        string[] tFolders = tilePath.Split('/');
+                        string currentTPath = tFolders[0];
+                        for (int i = 1; i < tFolders.Length; i++)
+                        {
+                            if (!AssetDatabase.IsValidFolder(currentTPath + "/" + tFolders[i]))
+                            {
+                                AssetDatabase.CreateFolder(currentTPath, tFolders[i]);
+                            }
+                            currentTPath += "/" + tFolders[i];
+                        }
+
+                        string assetPath = tilePath + "/" + prefab.name + ".asset";
+                        Tile prefabTile = AssetDatabase.LoadAssetAtPath<Tile>(assetPath);
+                        
+                        // Extract sprite from prefab's SpriteRenderer
+                        Sprite prefabSprite = null;
+                        SpriteRenderer sr = prefab.GetComponentInChildren<SpriteRenderer>();
+                        if (sr != null && sr.sprite != null)
+                        {
+                            prefabSprite = sr.sprite;
+                        }
+                        else
+                        {
+                            // Fallback: try to find sprite asset with same name
+                            string[] sprGuids = AssetDatabase.FindAssets(item.id + " t:Sprite");
+                            foreach (string sg in sprGuids)
+                            {
+                                string sp = AssetDatabase.GUIDToAssetPath(sg);
+                                Sprite candidate = AssetDatabase.LoadAssetAtPath<Sprite>(sp);
+                                if (candidate != null && candidate.name == item.id)
+                                {
+                                    prefabSprite = candidate;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (prefabTile == null)
+                        {
+                            prefabTile = ScriptableObject.CreateInstance<Tile>();
+                            prefabTile.gameObject = prefab;
+                            prefabTile.sprite = prefabSprite;
+                            AssetDatabase.CreateAsset(prefabTile, assetPath);
+                        }
+                        else
+                        {
+                            bool dirty = false;
+                            if (prefabTile.gameObject != prefab)
+                            {
+                                prefabTile.gameObject = prefab;
+                                dirty = true;
+                            }
+                            if (prefabTile.sprite == null && prefabSprite != null)
+                            {
+                                prefabTile.sprite = prefabSprite;
+                                dirty = true;
+                            }
+                            if (dirty)
+                            {
+                                EditorUtility.SetDirty(prefabTile);
+                                AssetDatabase.SaveAssets();
+                            }
+                        }
                     }
 
                     Vector3Int pos = new Vector3Int(item.position.x, item.position.y, 0);
-                    prefabHolderTilemap.SetTile(pos, prefabTile);
+                    
+                    // Instantiate direct to GameObject instead of Tile!
+                    Transform targetHolder = prefabHolderTilemap.transform;
+                    if (item.id.StartsWith("b_"))
+                    {
+                        GameObject holder = GameObject.Find("Grid/BuildingObject");
+                        if (holder != null) targetHolder = holder.transform;
+                    }
+                    else if (item.id.StartsWith("f_") || item.id.StartsWith("Farm"))
+                    {
+                        GameObject holder = GameObject.Find("Grid/Farm");
+                        if (holder != null) targetHolder = holder.transform;
+                    }
+
+                    GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, targetHolder);
+                    if (instance != null)
+                    {
+                        instance.transform.position = prefabHolderTilemap.CellToWorld(pos);
+
+                        if (item.flip)
+                        {
+                            SpriteRenderer sr = instance.GetComponentInChildren<SpriteRenderer>();
+                            if (sr != null) sr.transform.localScale = new Vector3(-1, 1, 1);
+
+                            Mineral mineral = instance.GetComponent<Mineral>();
+                            if (mineral != null)
+                            {
+                                Vector2Int origSize = mineral.area.size;
+                                mineral.area.size = new Vector2Int(origSize.y, origSize.x);
+                                EditorUtility.SetDirty(mineral);
+                            }
+                        }
+                    }
                 }
             }
         }
 
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
         Debug.Log("Successfully applied map config edits and generated island!");
     }
 
@@ -758,8 +1099,16 @@ public class ApplyMapConfigEditor : EditorWindow
                             var refSettings = new TextureImporterSettings();
                             refImporter.ReadTextureSettings(refSettings);
                             
-                            settings.spriteAlignment = refSettings.spriteAlignment;
-                            settings.spritePivot = refSettings.spritePivot;
+                            if (item.id.StartsWith("Ocean_") || item.id.StartsWith("Foam_"))
+                            {
+                                settings.spriteAlignment = (int)SpriteAlignment.Center;
+                                settings.spritePivot = new Vector2(0.5f, 0.5f);
+                            }
+                            else
+                            {
+                                settings.spriteAlignment = refSettings.spriteAlignment;
+                                settings.spritePivot = refSettings.spritePivot;
+                            }
                             // FINETUNING: Enforce 93.(3) PPU for macro tiles
                             texImporter.spritePixelsPerUnit = 93.33333f;
                             
@@ -797,12 +1146,25 @@ public class ApplyMapConfigEditor : EditorWindow
                             var refSettings = new TextureImporterSettings();
                             refImporter.ReadTextureSettings(refSettings);
                             
-                            if (settings.spriteAlignment != refSettings.spriteAlignment || settings.spritePivot != refSettings.spritePivot)
+                            if (item.id.StartsWith("Ocean_") || item.id.StartsWith("Foam_"))
                             {
-                                settings.spriteAlignment = refSettings.spriteAlignment;
-                                settings.spritePivot = refSettings.spritePivot;
-                                importer.SetTextureSettings(settings);
-                                changed = true;
+                                if (settings.spriteAlignment != (int)SpriteAlignment.Center || settings.spritePivot != new Vector2(0.5f, 0.5f))
+                                {
+                                    settings.spriteAlignment = (int)SpriteAlignment.Center;
+                                    settings.spritePivot = new Vector2(0.5f, 0.5f);
+                                    importer.SetTextureSettings(settings);
+                                    changed = true;
+                                }
+                            }
+                            else
+                            {
+                                if (settings.spriteAlignment != refSettings.spriteAlignment || settings.spritePivot != refSettings.spritePivot)
+                                {
+                                    settings.spriteAlignment = refSettings.spriteAlignment;
+                                    settings.spritePivot = refSettings.spritePivot;
+                                    importer.SetTextureSettings(settings);
+                                    changed = true;
+                                }
                             }
 
                             if (changed)
@@ -821,6 +1183,155 @@ public class ApplyMapConfigEditor : EditorWindow
         {
             AssetDatabase.Refresh();
         }
+    }
+}
+
+public class RenameMapTexturesEditor : EditorWindow
+{
+    private DefaultAsset targetFolder;
+    public TextAsset mapConfigFile;
+    private Vector2 scrollPos;
+
+    private class InvalidAsset
+    {
+        public string assetPath;
+        public string currentName;
+        public int selectedPrefixIndex;
+    }
+
+    private List<InvalidAsset> invalidAssets = new List<InvalidAsset>();
+    private string[] prefixOptions = new string[] { "None", "r_", "b_", "ob_", "f_", "Ground_", "Ocean_", "Foam_", "Farm_" };
+
+    [MenuItem("Tools/Farm Adventure/Rename Map Textures", false, 10)]
+    public static void ShowWindow()
+    {
+        GetWindow<RenameMapTexturesEditor>("Rename Map Textures");
+    }
+
+    private void OnGUI()
+    {
+        GUILayout.Label("Rename Map Textures", EditorStyles.boldLabel);
+        
+        targetFolder = (DefaultAsset)EditorGUILayout.ObjectField("Target Folder", targetFolder, typeof(DefaultAsset), false);
+        mapConfigFile = (TextAsset)EditorGUILayout.ObjectField("MapConfig JSON (Optional)", mapConfigFile, typeof(TextAsset), false);
+
+        if (GUILayout.Button("Scan Folder"))
+        {
+            ScanFolder();
+        }
+
+        if (invalidAssets.Count > 0)
+        {
+            GUILayout.Space(10);
+            GUILayout.Label("Files missing valid prefixes:", EditorStyles.boldLabel);
+            
+            scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
+            
+            for (int i = 0; i < invalidAssets.Count; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label(invalidAssets[i].currentName, GUILayout.Width(250));
+                invalidAssets[i].selectedPrefixIndex = EditorGUILayout.Popup(invalidAssets[i].selectedPrefixIndex, prefixOptions);
+                EditorGUILayout.EndHorizontal();
+            }
+            
+            EditorGUILayout.EndScrollView();
+
+            GUILayout.Space(10);
+            if (GUILayout.Button("Apply Rename"))
+            {
+                ApplyRename();
+            }
+        }
+        else if (targetFolder != null)
+        {
+            GUILayout.Space(10);
+            GUILayout.Label("All textures in folder have valid prefixes!", EditorStyles.helpBox);
+        }
+    }
+
+    private void ScanFolder()
+    {
+        invalidAssets.Clear();
+        if (targetFolder == null) return;
+
+        string folderPath = AssetDatabase.GetAssetPath(targetFolder);
+        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new string[] { folderPath });
+
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            string fileName = Path.GetFileNameWithoutExtension(path);
+
+            bool isValid = false;
+            foreach (string prefix in prefixOptions)
+            {
+                if (prefix == "None") continue;
+                if (fileName.StartsWith(prefix))
+                {
+                    isValid = true;
+                    break;
+                }
+            }
+
+            if (!isValid)
+            {
+                invalidAssets.Add(new InvalidAsset {
+                    assetPath = path,
+                    currentName = fileName,
+                    selectedPrefixIndex = 0
+                });
+            }
+        }
+    }
+
+    private void ApplyRename()
+    {
+        AssetDatabase.StartAssetEditing();
+        
+        string jsonContent = null;
+        string jsonPath = null;
+        if (mapConfigFile != null)
+        {
+            jsonPath = AssetDatabase.GetAssetPath(mapConfigFile);
+            jsonContent = System.IO.File.ReadAllText(jsonPath);
+        }
+
+        foreach (var asset in invalidAssets)
+        {
+            if (asset.selectedPrefixIndex > 0)
+            {
+                string prefix = prefixOptions[asset.selectedPrefixIndex];
+                
+                string newName = ApplyMapConfigEditor.GetNextAutoIncrementName(prefix);
+                
+                AssetDatabase.RenameAsset(asset.assetPath, newName);
+                
+                if (jsonContent != null)
+                {
+                    // Basic string replacement for JSON
+                    jsonContent = jsonContent.Replace("\\"id\\":\\"" + asset.currentName + "\\"", "\\"id\\":\\"" + newName + "\\"");
+                    jsonContent = jsonContent.Replace("\\"id\\": \\"" + asset.currentName + "\\"", "\\"id\\": \\"" + newName + "\\"");
+                }
+            }
+        }
+        AssetDatabase.StopAssetEditing();
+        AssetDatabase.SaveAssets();
+        
+        if (jsonContent != null && jsonPath != null)
+        {
+            System.IO.File.WriteAllText(jsonPath, jsonContent);
+            EditorUtility.SetDirty(mapConfigFile);
+        }
+        
+        AssetDatabase.Refresh();
+        
+        ApplyMapConfigEditor applyWindow = GetWindow<ApplyMapConfigEditor>("Apply Map Config", false);
+        if (applyWindow != null) {
+            applyWindow.ForceReload();
+        }
+        
+        ScanFolder();
     }
 }
 
@@ -872,6 +1383,9 @@ public class WebGridRow
 {
     public List<int> columns;
 }
+
+
+
 `;
       zip.file('Editor/ApplyMapConfigEditor.cs', csharpScript);
 

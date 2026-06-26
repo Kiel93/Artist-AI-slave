@@ -22,11 +22,17 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
   const [lastRunHash, setLastRunHash] = useState<string>(data.lastRunHash || "");
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [localPrompt, setLocalPrompt] = useState<string>(data.localPrompt || "");
   const imageInputs: string[] = data.imageInputs || ["image-0"];
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
   const allEdges = useEdges();
   const updateNodeInternals = useUpdateNodeInternals();
+  const incomingTextEdge = allEdges.find(e => e.target === id && e.targetHandle === 'text');
+  const hasTextConnection = !!incomingTextEdge;
+  const incomingNode = incomingTextEdge ? getNodes().find(n => n.id === incomingTextEdge.source) : null;
+  const incomingText = incomingNode ? (incomingNode.data.text || incomingNode.data.outputText || "") : "";
+  const displayPrompt = hasTextConnection ? incomingText : localPrompt;
 
   // Notify React Flow to recalculate handle positions whenever the number of handles changes
   useEffect(() => {
@@ -60,28 +66,28 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
     // Find all nodes connected to our input handles
     const incomingEdges = edges.filter(e => e.target === id);
     
-    const textInputs: string[] = [];
-    const imageInputs: string[] = [];
+    let hasTextConnectionGen = false;
+    let incomingTextInput = "";
+    const imageInputsGen: string[] = [];
 
     incomingEdges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
 
       if (edge.targetHandle === 'text') {
-        const text = sourceNode.data.text|| "";
-        if (text) textInputs.push(text);
+        hasTextConnectionGen = true;
+        incomingTextInput = sourceNode.data.text || sourceNode.data.outputText || "";
       } else if (edge.targetHandle?.startsWith('image-') || edge.targetHandle?.startsWith('img-')) {
-        const image = sourceNode.data.image|| sourceNode.data.referenceImage || sourceNode.data.bakedImage;
-        if (image) imageInputs.push(image);
-        // Also handle StyleInsertNode or bulk images if connected to an image handle
+        const image = sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
+        if (image) imageInputsGen.push(image);
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
-          imageInputs.push(...sourceNode.data.images);
+          imageInputsGen.push(...sourceNode.data.images);
         }
       }
     });
 
-    const finalPrompt = textInputs.join(", ");
-    const currentHash = JSON.stringify({ prompt: finalPrompt, images: imageInputs, model: selectedModel });
+    const finalPrompt = hasTextConnectionGen ? incomingTextInput : localPrompt;
+    const currentHash = JSON.stringify({ prompt: finalPrompt, images: imageInputsGen, model: selectedModel });
 
     // 2. Change Detection
     if (status === 'succeeded' && currentHash === lastRunHash && image) {
@@ -110,7 +116,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
       const { executeGeneralImageGenerationNode } = await import("@/lib/node-executor");
       const result = await executeGeneralImageGenerationNode(
         { ...data, model: selectedModel },
-        { textInputs, imageInputs },
+        { textInputs: [finalPrompt], imageInputs: imageInputsGen },
         { apiKey }
       );
 
@@ -152,11 +158,31 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
       </div>
       
       <div className="p-4 space-y-3">
+        {/* Prompt Input */}
+        <div className="relative pb-2">
+          <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
+          {!hasTextConnection ? (
+            <textarea
+              className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-blue-500/20 focus:border-blue-500/60 focus:outline-none resize-none"
+              placeholder="e.g. 'A futuristic city, neon lights'"
+              rows={2}
+              value={localPrompt}
+              onChange={(e) => {
+                setLocalPrompt(e.target.value);
+                setNodes((nds) => nds.map((n) => n.id === id ? { ...n, data: { ...n.data, localPrompt: e.target.value } } : n));
+              }}
+            />
+          ) : (
+            <div className="flex items-center h-6">
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Prompt Input</span>
+            </div>
+          )}
+        </div>
+
         {/* Top/Middle: Handles List */}
         <div className="flex flex-col gap-1 pb-1">
           {(() => {
             const handlesToRender = [
-              { id: 'text', color: '#3b82f6', isPlus: false }, // Blue for text
               ...imageInputs.map(id => ({ id, color: '#22c55e', isPlus: false })), // Green for images
             ];
             
@@ -193,7 +219,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
                     className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px]`}
                   />
                   <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">
-                    {h.id === 'text' ? 'Prompt Input' : `Reference Image`}
+                    Reference Image
                   </span>
                 </div>
               );
