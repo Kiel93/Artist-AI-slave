@@ -65,6 +65,7 @@ interface LayerData {
     height?: number;
     points?: number[];
     pathAnchors?: AnchorPoint[];
+    pathClosed?: boolean;
     inverted?: boolean;
   };
 }
@@ -828,12 +829,13 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [layerImages, setLayerImages] = useState<Record<string, { src: string, width: number, height: number }>>({});
   const [globalSelection, setGlobalSelection] = useState<{
-    type: 'marquee' | 'lasso';
+    type: 'marquee' | 'lasso' | 'path';
     x?: number;
     y?: number;
     width?: number;
     height?: number;
     points?: number[];
+    pathAnchors?: AnchorPoint[];
   } | null>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   
@@ -1450,7 +1452,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                      } else {
                        // Create new path!
                        if (activeLayer && isEditingMask) {
-                          const nl = layers.map(l => l.id === selectedLayerId ? { ...l, mask: { type: 'path', pathAnchors: [newPt], pathClosed: false, inverted: false } } : l);
+                          const nl = layers.map(l => l.id === selectedLayerId ? { ...l, mask: { type: 'path' as const, pathAnchors: [newPt], pathClosed: false, inverted: false } } : l);
                           setLayers(nl);
                           penDrawState.current = { isDrawing: true, activePointIndex: 0, initialMousePos: { x: relativeX, y: relativeY } };
                        } else {
