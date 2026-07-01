@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowLeft, Layers, Eye, EyeOff, Hand, Search, MousePointer2, GripVertical, ChevronDown, ChevronUp, Type, Image as ImageIcon, Plus, Square, Circle, Star as StarIcon, Brush, Trash2, Settings, Undo2, Redo2, SquareDashed, Lasso } from "lucide-react";
+import { ArrowLeft, Layers, Eye, EyeOff, Hand, Search, MousePointer2, GripVertical, ChevronDown, ChevronUp, Type, Image as ImageIcon, Plus, Square, Circle, Star as StarIcon, Brush, Trash2, Settings, Undo2, Redo2, SquareDashed, Lasso, PenTool } from "lucide-react";
 import { Node, Edge } from "reactflow";
 import { executeNode } from "@/lib/node-executor";
-import { Stage, Layer, Image as KonvaImage, Transformer, Group, Text as KonvaText, Rect, Circle as KonvaCircle, Star as KonvaStar, Line } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Transformer, Group, Text as KonvaText, Rect, Circle as KonvaCircle, Star as KonvaStar, Line, Path } from 'react-konva';
 import Konva from 'konva';
 import useImage from 'use-image';
+import { PathEditorOverlay } from './PathEditorOverlay';
+
+export interface AnchorPoint {
+   x: number;
+   y: number;
+   handleIn?: { x: number, y: number };
+   handleOut?: { x: number, y: number };
+   type: 'smooth' | 'sharp' | 'asymmetric';
+}
 
 interface LayerData {
   id: string; // matches handleId
@@ -17,7 +26,7 @@ interface LayerData {
   zIndex: number;
   visible: boolean;
   name: string;
-  type?: 'image' | 'text' | 'shape' | 'brush';
+  type?: 'image' | 'text' | 'shape' | 'brush' | 'path';
   blendMode?: GlobalCompositeOperation;
   shadowColor?: string;
   shadowBlur?: number;
@@ -27,9 +36,11 @@ interface LayerData {
   fontSize?: number;
   fontFamily?: string;
   fill?: string;
-  shapeType?: 'rect' | 'circle' | 'star';
+  shapeType?: 'rect' | 'circle' | 'star' | 'path';
   points?: number[];
   lines?: { points: number[] }[];
+  pathAnchors?: AnchorPoint[];
+  pathClosed?: boolean;
   stroke?: string;
   strokeWidth?: number;
   tension?: number;
@@ -47,18 +58,72 @@ interface LayerData {
     invert?: boolean;
   };
   mask?: {
-    type: 'marquee' | 'lasso';
+    type: 'marquee' | 'lasso' | 'path';
     x?: number;
     y?: number;
     width?: number;
     height?: number;
     points?: number[];
+    pathAnchors?: AnchorPoint[];
     inverted?: boolean;
   };
 }
 
+const generatePathString = (anchors: AnchorPoint[], closed: boolean) => {
+   if (!anchors || anchors.length < 2) return "";
+   let d = `M ${anchors[0].x} ${anchors[0].y} `;
+   
+   const len = closed ? anchors.length : anchors.length - 1;
+   for (let i = 0; i < len; i++) {
+      const current = anchors[i];
+      const next = anchors[(i + 1) % anchors.length];
+      
+      const cp1x = current.handleOut ? current.handleOut.x : current.x;
+      const cp1y = current.handleOut ? current.handleOut.y : current.y;
+      const cp2x = next.handleIn ? next.handleIn.x : next.x;
+      const cp2y = next.handleIn ? next.handleIn.y : next.y;
+      
+      d += `C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y} `;
+   }
+   if (closed) {
+      d += "Z";
+   }
+   return d;
+};
+
+const drawPathAnchors = (ctx: any, anchors: AnchorPoint[], reverse: boolean) => {
+   if (anchors.length < 2) return;
+   
+   let sequence = [...anchors];
+   if (reverse) {
+      sequence = sequence.reverse().map(a => ({
+         ...a,
+         handleIn: a.handleOut,
+         handleOut: a.handleIn
+      }));
+   }
+
+   ctx.moveTo(sequence[0].x, sequence[0].y);
+   for (let i = 0; i < sequence.length; i++) {
+      const current = sequence[i];
+      const next = sequence[(i + 1) % sequence.length];
+      
+      const cp1x = current.handleOut ? current.handleOut.x : current.x;
+      const cp1y = current.handleOut ? current.handleOut.y : current.y;
+      const cp2x = next.handleIn ? next.handleIn.x : next.x;
+      const cp2y = next.handleIn ? next.handleIn.y : next.y;
+      
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+   }
+   ctx.closePath();
+}
+
 const applyMaskClip = (ctx: any, mask: any) => {
-   if (!mask || !mask.points || mask.points.length < 2) return;
+   if (!mask) return;
+   const isPath = mask.type === 'path' && mask.pathAnchors && mask.pathAnchors.length >= 2;
+   const isPoints = mask.points && mask.points.length >= 2;
+   
+   if (!isPath && !isPoints) return;
    
    ctx.beginPath();
    
@@ -73,36 +138,52 @@ const applyMaskClip = (ctx: any, mask: any) => {
       
       // Determine winding of inner mask
       let sum = 0;
-      const pts = mask.points;
-      for (let i = 0; i < pts.length; i += 2) {
-         const x1 = pts[i];
-         const y1 = pts[i+1];
-         const x2 = pts[(i + 2) % pts.length];
-         const y2 = pts[(i + 3) % pts.length];
-         sum += (x2 - x1) * (y2 + y1);
-      }
-      
-      let finalPts = pts;
-      // We need inner mask to be clockwise (sum < 0) to oppose the counter-clockwise outer box (sum > 0)
-      if (sum > 0) {
-         finalPts = [];
-         for (let i = pts.length - 2; i >= 0; i -= 2) {
-            finalPts.push(pts[i], pts[i+1]);
+      if (isPath) {
+         for (let i = 0; i < mask.pathAnchors.length; i++) {
+            const p1 = mask.pathAnchors[i];
+            const p2 = mask.pathAnchors[(i + 1) % mask.pathAnchors.length];
+            sum += (p2.x - p1.x) * (p2.y + p1.y);
+         }
+      } else {
+         const pts = mask.points;
+         for (let i = 0; i < pts.length; i += 2) {
+            const x1 = pts[i];
+            const y1 = pts[i+1];
+            const x2 = pts[(i + 2) % pts.length];
+            const y2 = pts[(i + 3) % pts.length];
+            sum += (x2 - x1) * (y2 + y1);
          }
       }
       
-      ctx.moveTo(finalPts[0], finalPts[1]);
-      for (let i = 2; i < finalPts.length; i += 2) {
-         ctx.lineTo(finalPts[i], finalPts[i+1]);
+      const needsReverse = sum > 0;
+      
+      if (isPath) {
+         drawPathAnchors(ctx, mask.pathAnchors, needsReverse);
+      } else {
+         let finalPts = mask.points;
+         if (needsReverse) {
+            finalPts = [];
+            for (let i = mask.points.length - 2; i >= 0; i -= 2) {
+               finalPts.push(mask.points[i], mask.points[i+1]);
+            }
+         }
+         ctx.moveTo(finalPts[0], finalPts[1]);
+         for (let i = 2; i < finalPts.length; i += 2) {
+            ctx.lineTo(finalPts[i], finalPts[i+1]);
+         }
+         ctx.closePath();
       }
-      ctx.closePath();
    } else {
-      const pts = mask.points;
-      ctx.moveTo(pts[0], pts[1]);
-      for (let i = 2; i < pts.length; i += 2) {
-         ctx.lineTo(pts[i], pts[i+1]);
+      if (isPath) {
+         drawPathAnchors(ctx, mask.pathAnchors, false);
+      } else {
+         const pts = mask.points;
+         ctx.moveTo(pts[0], pts[1]);
+         for (let i = 2; i < pts.length; i += 2) {
+            ctx.lineTo(pts[i], pts[i+1]);
+         }
+         ctx.closePath();
       }
-      ctx.closePath();
    }
 };
 
@@ -114,7 +195,7 @@ interface WorkspaceProps {
   onExit: () => void;
 }
 
-type ToolMode = "select" | "pan" | "zoom" | "brush" | "marquee" | "lasso";
+type ToolMode = "select" | "pan" | "zoom" | "brush" | "marquee" | "lasso" | "pen";
 
 const URLImage = ({ layer, url, isSelected, onSelect, onChange, width, height, isInteractive }: any) => {
   const [image] = useImage(url, 'anonymous');
@@ -332,6 +413,9 @@ const ShapeLayerRenderer = ({ layer, isSelected, onSelect, onChange, isInteracti
         {layer.shapeType === 'rect' && <Rect {...commonProps} width={layer.width || 100} height={layer.height || 100} offsetX={(layer.width || 100)/2} offsetY={(layer.height || 100)/2} />}
         {layer.shapeType === 'circle' && <KonvaCircle {...commonProps} radius={layer.radius || 50} />}
         {layer.shapeType === 'star' && <KonvaStar {...commonProps} numPoints={layer.numPoints || 5} innerRadius={layer.innerRadius || 25} outerRadius={layer.outerRadius || 50} />}
+        {layer.shapeType === 'path' && layer.pathAnchors && layer.pathAnchors.length > 0 && (
+           <Path {...commonProps} data={generatePathString(layer.pathAnchors, !!layer.pathClosed)} />
+        )}
       </Group>
       
       {isSelected && isInteractive && (
@@ -702,7 +786,7 @@ function InspectorPanel({ layer, image, onChange, globalSelection, onApplyMask, 
                    Apply Selection as Mask
                  </button>
               ) : (
-                 <p className="text-[10px] text-gray-500 text-center">Use Marquee or Lasso tool to create a selection.</p>
+                 <p className="text-[10px] text-gray-500 text-center">Use Marquee or Lasso to create a selection, or use the Pen Tool directly on an image layer to draw a vector mask.</p>
               )}
 
               {layer.mask && (
@@ -763,6 +847,12 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
   const isDrawing = useRef(false);
   const isMiddlePanning = useRef(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
+  
+  const penDrawState = useRef<{
+    isDrawing: boolean;
+    activePointIndex: number;
+    initialMousePos: { x: number, y: number };
+  }>({ isDrawing: false, activePointIndex: -1, initialMousePos: { x: 0, y: 0 } });
 
   const [historyState, setHistoryState] = useState<{
     stack: { layers: LayerData[], settings: typeof canvasSettings }[],
@@ -1170,6 +1260,15 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                     pts.push(p.x, p.y);
                  }
                  newMask.points = pts;
+              } else if (globalSelection.type === 'path' && globalSelection.pathAnchors) {
+                 const newAnchors = globalSelection.pathAnchors.map(a => {
+                    const p = transform.point({ x: a.x, y: a.y });
+                    const hi = a.handleIn ? transform.point(a.handleIn) : undefined;
+                    const ho = a.handleOut ? transform.point(a.handleOut) : undefined;
+                    return { ...a, x: p.x, y: p.y, handleIn: hi, handleOut: ho };
+                 });
+                 newMask.type = 'path';
+                 newMask.pathAnchors = newAnchors;
               }
               
               const newLayers = layers.map(l => l.id === selectedLayerId ? { ...l, mask: newMask } : l);
@@ -1194,6 +1293,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
           <div className="w-6 h-px bg-white/10 my-1" />
 
           <button onClick={() => setToolMode("brush")} className={`p-2 rounded-lg ${toolMode === "brush" ? "bg-emerald-500/20 text-emerald-400" : "text-gray-400 hover:text-white"}`} title="Brush (B)"><Brush className="w-5 h-5" /></button>
+          <button onClick={() => setToolMode("pen")} className={`p-2 rounded-lg ${toolMode === "pen" ? "bg-emerald-500/20 text-emerald-400" : "text-gray-400 hover:text-white"}`} title="Pen Tool (P)"><PenTool className="w-5 h-5" /></button>
           <div className="w-6 h-px bg-white/10 my-1" />
           <button onClick={() => {
              const newId = `text-layer-${Date.now()}`;
@@ -1272,6 +1372,104 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                      setSelectedLayerId(null);
                      return;
                   }
+                  
+                  if (toolMode === "pen") {
+                     const stage = e.target.getStage();
+                     if (!stage) return;
+                     const pos = stage.getPointerPosition();
+                     if (!pos) return;
+                     const relativeX = (pos.x - viewport.panX) / viewport.zoom - dimensions.width / 2;
+                     const relativeY = (pos.y - viewport.panY) / viewport.zoom - dimensions.height / 2;
+                   
+                     const activeLayer = layers.find(l => l.id === selectedLayerId);
+                     const isEditingMask = activeLayer?.type === 'image';
+                     
+                     let targetAnchors: AnchorPoint[] | undefined;
+                     let targetClosed = false;
+                     let targetTransform = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, offsetX: 0, offsetY: 0 };
+                     
+                     if (activeLayer) {
+                        const img = layerImages[activeLayer.id];
+                        const w = img ? img.width : (activeLayer.width || 0);
+                        const h = img ? img.height : (activeLayer.height || 0);
+                        targetTransform = {
+                           x: activeLayer.x || 0, y: activeLayer.y || 0,
+                           scaleX: activeLayer.scaleX !== undefined ? activeLayer.scaleX : 1,
+                           scaleY: activeLayer.scaleY !== undefined ? activeLayer.scaleY : 1,
+                           rotation: activeLayer.rotation || 0,
+                           offsetX: activeLayer.type === 'image' || img ? w/2 : 0,
+                           offsetY: activeLayer.type === 'image' || img ? h/2 : 0
+                        };
+                     }
+                     
+                     // Convert click point to layer's local space
+                     const node = new Konva.Group(targetTransform);
+                     const localPt = activeLayer ? node.getTransform().copy().invert().point({ x: relativeX, y: relativeY }) : { x: relativeX, y: relativeY };
+                     const newPt: AnchorPoint = { x: localPt.x, y: localPt.y, type: 'sharp' };
+
+                     if (isEditingMask && activeLayer?.mask?.type === 'path') {
+                        targetAnchors = activeLayer.mask.pathAnchors;
+                        targetClosed = !!activeLayer.mask.pathClosed;
+                     } else if (activeLayer?.shapeType === 'path') {
+                        targetAnchors = activeLayer.pathAnchors;
+                        targetClosed = !!activeLayer.pathClosed;
+                     }
+                     
+                     // Check for closure
+                     if (targetAnchors && targetAnchors.length > 2 && !targetClosed) {
+                       const firstPt = targetAnchors[0];
+                       const dist = Math.hypot(firstPt.x - localPt.x, firstPt.y - localPt.y);
+                       // We use absolute distance for hit detection
+                       const globalFirstPt = node.getTransform().point(firstPt);
+                       const globalDist = Math.hypot(globalFirstPt.x - relativeX, globalFirstPt.y - relativeY);
+                       
+                       if (globalDist < 10 / viewport.zoom) {
+                         const nl = layers.map(l => {
+                            if (l.id === selectedLayerId) {
+                               if (isEditingMask) return { ...l, mask: { ...l.mask!, pathClosed: true } };
+                               return { ...l, pathClosed: true };
+                            }
+                            return l;
+                         });
+                         setLayers(nl);
+                         return;
+                       }
+                     }
+                   
+                     if (targetAnchors && !targetClosed) {
+                       const newAnchors = [...targetAnchors, newPt];
+                       const nl = layers.map(l => {
+                          if (l.id === selectedLayerId) {
+                             if (isEditingMask) return { ...l, mask: { ...l.mask!, pathAnchors: newAnchors } };
+                             return { ...l, pathAnchors: newAnchors };
+                          }
+                          return l;
+                       });
+                       setLayers(nl);
+                       penDrawState.current = { isDrawing: true, activePointIndex: newAnchors.length - 1, initialMousePos: { x: relativeX, y: relativeY } };
+                     } else {
+                       // Create new path!
+                       if (activeLayer && isEditingMask) {
+                          const nl = layers.map(l => l.id === selectedLayerId ? { ...l, mask: { type: 'path', pathAnchors: [newPt], pathClosed: false, inverted: false } } : l);
+                          setLayers(nl);
+                          penDrawState.current = { isDrawing: true, activePointIndex: 0, initialMousePos: { x: relativeX, y: relativeY } };
+                       } else {
+                          const newId = `shape-layer-${Date.now()}`;
+                          const newLayer: any = {
+                             id: newId, name: `Path Shape`, type: 'shape', shapeType: 'path',
+                             pathAnchors: [newPt], pathClosed: false,
+                             fill: 'transparent', stroke: '#10b981', strokeWidth: 5,
+                             x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1, zIndex: layers.length, visible: true
+                          };
+                          const nl = [...layers, newLayer];
+                          setLayers(nl);
+                          setSelectedLayerId(newId);
+                          penDrawState.current = { isDrawing: true, activePointIndex: 0, initialMousePos: { x: relativeX, y: relativeY } };
+                       }
+                     }
+                     return;
+                  }
+
                   if (toolMode === "marquee" || toolMode === "lasso") {
                      isDrawing.current = true;
                      const stage = e.target.getStage();
@@ -1343,6 +1541,58 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                      return;
                   }
 
+                  if (toolMode === "pen" && penDrawState.current.isDrawing && selectedLayerId) {
+                     const stage = e.target.getStage();
+                     if (!stage) return;
+                     const pos = stage.getPointerPosition();
+                     if (!pos) return;
+                     const relativeX = (pos.x - viewport.panX) / viewport.zoom - dimensions.width / 2;
+                     const relativeY = (pos.y - viewport.panY) / viewport.zoom - dimensions.height / 2;
+                   
+                     const dx = relativeX - penDrawState.current.initialMousePos.x;
+                     const dy = relativeY - penDrawState.current.initialMousePos.y;
+                   
+                     if (Math.hypot(dx, dy) > 2 / viewport.zoom) {
+                       setLayers(prev => prev.map(l => {
+                          if (l.id !== selectedLayerId) return l;
+                          const isEditingMask = l.type === 'image';
+                          
+                          let targetAnchors = isEditingMask ? l.mask?.pathAnchors : l.pathAnchors;
+                          if (!targetAnchors) return l;
+                          
+                          // Transform dx/dy into local space of the layer
+                          const img = layerImages[l.id];
+                          const w = img ? img.width : (l.width || 0);
+                          const h = img ? img.height : (l.height || 0);
+                          const node = new Konva.Group({
+                             x: l.x || 0, y: l.y || 0, scaleX: l.scaleX !== undefined ? l.scaleX : 1, scaleY: l.scaleY !== undefined ? l.scaleY : 1,
+                             rotation: l.rotation || 0, offsetX: l.type === 'image' || img ? w/2 : 0, offsetY: l.type === 'image' || img ? h/2 : 0
+                          });
+                          const transform = node.getTransform().copy().invert();
+                          const localCurrentPos = transform.point({ x: relativeX, y: relativeY });
+                          
+                          const anchors = [...targetAnchors];
+                          const i = penDrawState.current.activePointIndex;
+                          
+                          // The handleOut is simply the local mouse position
+                          // The handleIn is mirrored
+                          const localDx = localCurrentPos.x - anchors[i].x;
+                          const localDy = localCurrentPos.y - anchors[i].y;
+                          
+                          anchors[i] = {
+                            ...anchors[i],
+                            type: 'smooth',
+                            handleOut: { x: localCurrentPos.x, y: localCurrentPos.y },
+                            handleIn: { x: anchors[i].x - localDx, y: anchors[i].y - localDy }
+                          };
+                          
+                          if (isEditingMask) return { ...l, mask: { ...l.mask!, pathAnchors: anchors } };
+                          return { ...l, pathAnchors: anchors };
+                       }));
+                     }
+                     return;
+                  }
+
                   if (isDrawing.current && (toolMode === "marquee" || toolMode === "lasso")) {
                      const stage = e.target.getStage();
                      if (!stage) return;
@@ -1396,6 +1646,10 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                      return;
                   }
                   if (e.evt.button !== 0) return;
+
+                  if (toolMode === "pen") {
+                     penDrawState.current.isDrawing = false;
+                  }
 
                   if (isDrawing.current && (toolMode === "marquee" || toolMode === "lasso")) {
                      isDrawing.current = false;
@@ -1522,6 +1776,63 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                          closed={!isDrawing.current}
                          listening={false}
                       />
+                   )}
+
+                   {/* Render PathEditorOverlay for active layer if pen tool is active */}
+                   {toolMode === 'pen' && selectedLayerId && !globalSelection && (
+                     (() => {
+                        const activeLayer = layers.find(l => l.id === selectedLayerId);
+                        if (!activeLayer) return null;
+                        
+                        const img = layerImages[activeLayer.id];
+                        const w = img ? img.width : (activeLayer.width || 0);
+                        const h = img ? img.height : (activeLayer.height || 0);
+                        const transform = {
+                           x: activeLayer.x || 0,
+                           y: activeLayer.y || 0,
+                           scaleX: activeLayer.scaleX !== undefined ? activeLayer.scaleX : 1,
+                           scaleY: activeLayer.scaleY !== undefined ? activeLayer.scaleY : 1,
+                           rotation: activeLayer.rotation || 0,
+                           offsetX: activeLayer.type === 'image' || img ? w/2 : 0,
+                           offsetY: activeLayer.type === 'image' || img ? h/2 : 0
+                        };
+
+                        if (activeLayer.shapeType === 'path' && activeLayer.pathAnchors) {
+                           return (
+                             <PathEditorOverlay
+                               anchors={activeLayer.pathAnchors}
+                               closed={!!activeLayer.pathClosed}
+                               onChange={(newAnchors, closed) => {
+                                  const nl = layers.map(l => l.id === selectedLayerId ? { ...l, pathAnchors: newAnchors, pathClosed: closed } : l);
+                                  setLayers(nl);
+                                  saveLayersToNode(nl);
+                               }}
+                               transform={transform}
+                               isActive={true}
+                               isEditingMask={false}
+                             />
+                           );
+                        }
+
+                        if (activeLayer.mask && activeLayer.mask.type === 'path' && activeLayer.mask.pathAnchors) {
+                           return (
+                             <PathEditorOverlay
+                               anchors={activeLayer.mask.pathAnchors}
+                               closed={true}
+                               onChange={(newAnchors, closed) => {
+                                  const nl = layers.map(l => l.id === selectedLayerId ? { ...l, mask: { ...l.mask!, pathAnchors: newAnchors } } : l);
+                                  setLayers(nl);
+                                  saveLayersToNode(nl);
+                               }}
+                               transform={transform}
+                               isActive={true}
+                               isEditingMask={true}
+                             />
+                           );
+                        }
+                        
+                        return null;
+                     })()
                    )}
                  </Group>
                </Layer>
