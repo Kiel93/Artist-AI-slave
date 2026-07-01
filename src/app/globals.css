@@ -10,6 +10,10 @@
   --color-blender-border: #333333;
   --color-blender-input: #121212;
   --color-blender-hover: #d97706;
+  --color-rose-100: #ffe4e6;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-900: #881337;
 }
 
 :root {

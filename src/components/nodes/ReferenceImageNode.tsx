@@ -54,19 +54,14 @@ export default function ReferenceImageNode({ id, data, selected }: { id: string;
             </button>
           </div>
         ) : (
-          <label className="w-full aspect-video rounded border-2 border-dashed border-emerald-500/20 flex flex-col items-center justify-center hover:border-emerald-500/50 cursor-pointer transition-colors bg-black/20 text-emerald-400/40">
+          <label className="w-full rounded border-2 border-dashed border-emerald-500/20 flex flex-col items-center justify-center hover:border-emerald-500/50 cursor-pointer transition-colors bg-black/20 text-emerald-400/40">
             <UploadCloud className="w-8 h-8 mb-1" />
             <span className="text-xs">Upload Image</span>
             <input type="file" className="hidden nodrag" onChange={handleUpload} accept="image/*" />
           </label>
         )}
       </div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="image"
-        className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !right-[-10px]"
-      />
+      <Handle type="source" position={Position.Right} id="image" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

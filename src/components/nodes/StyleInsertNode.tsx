@@ -100,7 +100,7 @@ export default function StyleInsertNode({ id, data, selected }: { id: string; da
       <div className="p-4 space-y-3">
         <div className="grid grid-cols-2 gap-2">
           {images.map((img, i) => (
-            <div key={i} className="relative aspect-square rounded bg-black/40 overflow-hidden border border-emerald-500/20 group/img flex items-center justify-center">
+            <div key={i} className="relative rounded bg-black/40 overflow-hidden border border-emerald-500/20 group/img flex items-center justify-center">
               <img src={img} className="max-w-full max-h-full object-contain" alt="style" />
               <button 
                 onClick={() => removeImage(i)}
@@ -111,7 +111,7 @@ export default function StyleInsertNode({ id, data, selected }: { id: string; da
             </div>
           ))}
           {images.length < 4 && (
-            <label className="aspect-square rounded border-2 border-dashed border-emerald-500/20 flex flex-col items-center justify-center hover:border-emerald-500/50 cursor-pointer transition-colors bg-black/20 text-emerald-400/40">
+            <label className="rounded border-2 border-dashed border-emerald-500/20 flex flex-col items-center justify-center hover:border-emerald-500/50 cursor-pointer transition-colors bg-black/20 text-emerald-400/40">
               <UploadCloud className="w-6 h-6" />
               <input type="file" className="hidden nodrag" onChange={handleUpload} accept="image/*" />
             </label>
@@ -186,12 +186,7 @@ export default function StyleInsertNode({ id, data, selected }: { id: string; da
         </button>
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="text"
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !right-[-10px]"
-      />
+      <Handle type="source" position={Position.Right} id="text" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
     </div>
   );
 }

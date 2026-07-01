@@ -22,7 +22,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
       const sourceNode = nodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.image|| "";
+        inputImageUrl = sourceNode.data.image || sourceNode.data.outputImage || "";
       }
     });
 
@@ -138,19 +138,14 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
         {/* Top Panel: Inputs */}
         <div className="flex flex-col gap-1 pb-1">
           <div className="relative flex items-center h-6">
-            <Handle
-              type="target"
-              id="image"
-              position={Position.Left}
-              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
-            />
+            <Handle type="target" position={Position.Left} id="image" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Image Input</span>
           </div>
         </div>
 
         {/* Image Preview with checkerboard pattern to show transparency */}
         <div 
-          className="w-full aspect-square border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
+          className="w-full border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
           style={{
             backgroundImage: `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`,
             backgroundSize: '20px 20px'
@@ -193,7 +188,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
           <button 
             onClick={removeBackground}
             disabled={status === 'processing'}
-            className="nodrag flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
           >
             <Play className="w-4 h-4 fill-current" />
             PROCESS
@@ -201,7 +196,7 @@ export default function BackgroundRemoverNode({ id, data, selected }: { id: stri
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
+      <Handle type="source" position={Position.Right} id="image" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

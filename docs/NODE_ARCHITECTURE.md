@@ -9,6 +9,7 @@ Consistency in color helps users identify data types at a glance:
 
 *   **Text Data** (Prompts/Fragments/Connectors): Use **Blue** (`#3b82f6`) for handles and accents.
 *   **Image Data** (Reference/Sketch/Analyzer): Use **Emerald/Green** (`#22c55e`) for handles and accents.
+*   **Value Data** (Numeric Drivers/Limits): Use **Rose** (`#f43f5e`) for handles, connection lines, and accents.
 *   **AI Logic** (Refiners/Optimizers): Use **Purple** (`#a855f7`) for handles and accents.
 *   **Output/Final Results**: Use **Amber/Gold** (`#fbbf24`) for borders and glow effects.
 
@@ -47,11 +48,22 @@ Consistency in color helps users identify data types at a glance:
 ## 3. UI Element Aesthetics (Universal Components)
 To ensure all nodes feel like they belong to a cohesive application, adhere to the following Tailwind/CSS structural rules for internal UI elements:
 
-*   **Buttons**: Should be chunky and tactile. Use `py-2 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 transition-all`. The background color must match the node's semantic color (e.g., `bg-emerald-600 hover:bg-emerald-500` for Image nodes).
+*   **Action Buttons (Primary)**: Action buttons (Generate, Run Pipeline, etc.) must be chunky, tactile, and highly interactive. You MUST use the following exact blueprint for primary action buttons: `w-full py-2.5 bg-[color]-600 hover:bg-[color]-500 border-b-4 border-[color]-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all`. The semantic `[color]` must match the node's theme (e.g., `emerald`, `indigo`, `amber`).
 *   **Text Inputs / Textareas**: Should sit recessed within the node. Use `bg-black/40 text-gray-200 p-2 rounded border border-[semantic-color]/20 focus:border-[semantic-color]/60 focus:outline-none`. **DO NOT use legacy CSS variables** like `var(--color-blender-input)`.
-*   **Sliders (Range Inputs)**: Use `w-full accent-[semantic-color]-500` for native HTML range inputs to match the node's theme.
+*   **Sliders (Range Inputs)**: Native HTML range inputs MUST use inline `style={{ accentColor: '<semantic-color>' }}` (e.g. `#f43f5e` for Rose) rather than relying on Tailwind's `accent-*` utilities, to guarantee cross-browser consistency and bypass JIT compiler cache issues.
+*   **Toggle Switches**: Toggle switches MUST use a unified pill-shaped design: a `w-8 h-4 rounded-full` container with an inner sliding circle (`w-3 h-3 bg-white rounded-full absolute top-0.5`). The active background color must be applied via inline styles matching the node's semantic theme color.
+*   **Typography (Unified Fonts)**: Numeric displays, limits, and primary UI values must use a clean, bold sans-serif font (`font-bold`). Avoid generic `font-mono` unless strictly displaying raw code or API JSON data. Ensure the font sizes harmonize with the rest of the node (e.g., `text-lg` or `text-2xl` for prominent values).
 *   **Icons**: Always use `lucide-react` icons. Give them a standardized size (e.g., `w-5 h-5` for headers, `w-4 h-4` for inline buttons) and tint them with the node's semantic color (e.g., `text-emerald-400`).
-*   **Handle Sizing & Position**: ReactFlow handles should be prominent but clean. Override default classes with `!w-4 !h-4 !border-none`. Because most node contents are wrapped in padded containers (e.g. `p-3` or `p-4`), you MUST use offset classes like `!left-[-24px]` and `!right-[-10px]` to push the handles out so they perfectly align with the outer stroke of the node, overriding React Flow's native inner-padding snap.
+*   **Handle Sizing & Design**: All handles MUST use a unified inline-style design to prevent Tailwind compilation issues.
+    *   **ClassNames**: Use ONLY `!min-w-0 !min-h-0 rounded-full` on the Handle component.
+    *   **Inline Styles**: You MUST apply `style={{ width: '16px', height: '16px', backgroundColor: '<color>', borderColor: '<darker-color>', borderWidth: '2px' }}`.
+    *   **Colors**:
+        *   Text (Blue): `backgroundColor: '#3b82f6', borderColor: '#1e3a8a'`
+        *   Image (Green): `backgroundColor: '#22c55e', borderColor: '#14532d'`
+        *   Value (Rose): `backgroundColor: '#f43f5e', borderColor: '#9f1239'`
+        *   AI (Purple): `backgroundColor: '#a855f7', borderColor: '#581c87'`
+*   **Handle Placement (Alignment)**:
+    *   ReactFlow handles should be prominent but clean. Override default classes with `!w-4 !h-4 !border-none`. Because most node contents are wrapped in padded containers (e.g. `p-3` or `p-4`), you MUST use offset classes like `!left-[-24px]` and `!right-[-10px]` to push the handles out so they perfectly align with the outer stroke of the node, overriding React Flow's native inner-padding snap.
 *   **No Boxed Controls**: Controls in the Middle Panel (sliders, toggles, dropdowns) MUST NOT be wrapped in internal containers with their own background colors, paddings, or borders (e.g., avoid `bg-black/20 p-3 rounded border`). They should sit naturally on the node's main background, separated only by standard vertical spacing.
 
 ---
@@ -87,6 +99,7 @@ To prevent brittle, case-by-case property checking when nodes pass data to one a
 
 *   **Image Output**: Any node that generates or outputs a primary image must store it as a Base64 Data URL or Blob URL under `data.outputImage`. (Legacy keys like `resultUrl`, `imageUrl`, or `bakedImage` should be migrated or mapped to `outputImage`).
 *   **Text Output**: Any node that generates or outputs primary text (prompts, analysis, styles) must store it under `data.outputText`.
+*   **Value Output**: Any node that drives numeric values must store it under `data.value`. Target nodes must expose `data.limits` (e.g. `{ zoom: { min: 100, max: 1000 } }`) so source nodes can display constraints.
 
 **Consuming Data**:
 When a node (like a Refiner or Output node) reads from incoming edges, it should confidently look for `sourceNode.data.outputImage` or `sourceNode.data.outputText` instead of checking a dozen different potential property names.
@@ -130,3 +143,17 @@ For nodes that have a dedicated inner workspace (like Image Editor or Compound N
 2. **Style**: The button MUST be a "clear button". This means it should have a transparent background (`bg-transparent`), a subtle border (`border border-<theme-color>-500/30`), and subtle hover effects (`hover:bg-<theme-color>-500/10`), matching the node's primary theme color.
 3. **Functionality**: A double click on the node background itself should still open the workspace as a fallback shortcut, but the button should be the primary, discoverable UI element for editing.
 4. **Placement**: The 'Open Editor' button MUST be placed near the bottom of the node's main content area. If the node has a primary action button (like 'Run Pipeline'), it should be placed immediately above it. If the node has an Image Preview, the 'Open Editor' button MUST be placed immediately above the image previewer, keeping the preview anchored to the bottom.
+
+---
+
+## 12. Handle Connections
+1. **Single Connection Restriction**: Currently, NO single input (target) handle accepts multiple connections, regardless of data type (image, text, value, etc.). `Canvas.tsx` or the edge routing logic must enforce this 1-to-1 restriction for target handles.
+
+---
+
+## 13. Value Parameter Overrides
+When a node's parameter slider (e.g., Zoom, Opacity) is driven by an incoming connection from a `ValueNode`:
+1. **Slider Replacement**: The local slider control must be completely hidden.
+2. **Minimalist UI**: Instead of displaying an obtrusive "driven by value node" graphic, box, or textfield, simply display the parameter's minimum and maximum limits directly inline as plain text (e.g., `(minVal/maxVal)`).
+3. **Styling**: The limits text must be styled cleanly on the same line as the parameter label (e.g., `Zoom (100/1000)`). Do NOT use italics. The text color should match the default node text color (do not use harsh semantic colors for this passive display).
+4. **Interpolation**: If the incoming `ValueNode` is set to "slider" mode (which emits 0 to 100), the receiving node MUST mathematically map/interpolate that 0-100 percentage into its own min/max limits (e.g., a 0 value becomes the node's minimum limit, 100 becomes the maximum). If the mode is "numeric", the exact value is used directly but clamped to the limits.

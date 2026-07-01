@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Handle, Position, useReactFlow, useEdges } from "reactflow";
+import { Handle, Position, useReactFlow, useEdges, useNodes } from "reactflow";
 import { ImageIcon, RefreshCw, Play, AlertCircle, ChevronDown, Eye, PenTool, Download } from "lucide-react";
 import { queueImageGen, getTaskStatus, uploadMediaDirect, fetchNodePrompt } from "@/lib/plenxai";
 
@@ -34,6 +34,48 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
   const edgesReactFlow = useEdges();
+  const nodesReactFlow = useNodes();
+
+  // Register limits
+  useEffect(() => {
+    if (!data.limits || !data.limits.threshold) {
+      setNodes(nds => nds.map(n => n.id === id ? { 
+        ...n, 
+        data: { ...n.data, limits: { ...n.data.limits, threshold: { min: 0, max: 100, step: 1 } } } 
+      } : n));
+    }
+  }, []);
+
+  // Handle external value connection for threshold
+  const thresholdEdge = edgesReactFlow.find(e => e.target === id && e.targetHandle === 'threshold');
+  const thresholdSourceNode = thresholdEdge ? nodesReactFlow.find(n => n.id === thresholdEdge.source) : null;
+  const hasThresholdConnection = !!thresholdSourceNode;
+
+  useEffect(() => {
+    const dataAny = thresholdSourceNode?.data as any;
+    if (hasThresholdConnection && dataAny?.value !== undefined) {
+      let val = dataAny.value;
+      if (dataAny.mode === 'slider') {
+        val = 0 + (val / 100) * (100 - 0);
+      }
+      const clamped = Math.min(Math.max(val, 0), 100);
+      if (clamped !== threshold) {
+        setThreshold(clamped);
+        setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, threshold: clamped } } : n));
+        
+        // Auto trigger recalculate if connected edge value changes
+        if (generatedUrl) {
+          performChromaKey(generatedUrl, clamped).then(extractedAssetUrl => {
+            setImage(extractedAssetUrl);
+            setNodes(nds => nds.map(n => n.id === id ? { 
+              ...n, 
+              data: { ...n.data, image: extractedAssetUrl, threshold: clamped } 
+            } : n));
+          }).catch(console.error);
+        }
+      }
+    }
+  }, [hasThresholdConnection, (thresholdSourceNode?.data as any)?.value, id, setNodes, threshold, generatedUrl]);
   const incomingTextEdge = edgesReactFlow.find(e => e.target === id && e.targetHandle === 'text');
   const hasTextConnection = !!incomingTextEdge;
   const incomingNode = incomingTextEdge ? getNodes().find(n => n.id === incomingTextEdge.source) : null;
@@ -190,10 +232,10 @@ export default function AssetGeneratorNode({ id, data, selected }: { id: string;
         styleInput = sourceNode.data.text|| "";
       }
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.image|| "";
+        inputImageUrl = sourceNode.data.image || sourceNode.data.outputImage || "";
       }
       if (edge.targetHandle === 'image-2') {
-        secondaryImageUrl = sourceNode.data.image|| "";
+        secondaryImageUrl = sourceNode.data.image || sourceNode.data.outputImage || "";
       }
     });
 
@@ -376,7 +418,7 @@ Spec: resolution:{resolution}. ratio 1:1.`;
       
       <div className="p-4 space-y-3">
         <div className="relative">
-          <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
+          <Handle type="target" position={Position.Left} id="text" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
           {!hasTextConnection ? (
             <textarea
               className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-indigo-500/20 focus:border-indigo-500/60 focus:outline-none resize-none"
@@ -397,24 +439,27 @@ Spec: resolution:{resolution}. ratio 1:1.`;
 
         <div className="flex flex-col gap-1">
            <div className="relative flex items-center h-6">
-             <Handle type="target" position={Position.Left} id="style" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px]" />
+             <Handle type="target" position={Position.Left} id="style" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Style Input</span>
            </div>
            <div className="relative flex items-center h-6">
-             <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+             <Handle type="target" position={Position.Left} id="image" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Base Island Image</span>
            </div>
            <div className="relative flex items-center h-6">
-             <Handle type="target" position={Position.Left} id="image-2" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+             <Handle type="target" position={Position.Left} id="image-2" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Reference Image</span>
            </div>
         </div>
 
-        <div className="space-y-1">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] text-indigo-200 font-medium">Key Threshold</span>
+        <div className="space-y-1 relative">
+          <div className="relative flex justify-between items-center w-full">
+            <Handle type="target" position={Position.Left} id="threshold" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#ef4444', borderColor: '#7f1d1d', borderWidth: '2px' }} />
+            <span className="text-gray-300 text-xs font-medium">Threshold</span>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-indigo-400">{threshold}</span>
+              <span className="text-[10px] font-bold text-indigo-400">
+                {Number(threshold.toFixed(2))} {hasThresholdConnection && <span className="font-normal text-gray-300 ml-1">(0/100)</span>}
+              </span>
               <button 
                 onClick={async () => {
                   if (basePreviewUrl && generatedUrl) {
@@ -441,30 +486,32 @@ Spec: resolution:{resolution}. ratio 1:1.`;
               </button>
             </div>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={threshold}
-            onChange={async (e) => {
-              const newThreshold = parseInt(e.target.value);
-              setThreshold(newThreshold);
-              
-              if (generatedUrl) {
-                try {
-                  const extractedAssetUrl = await performChromaKey(generatedUrl, newThreshold);
-                  setImage(extractedAssetUrl);
-                  setNodes(nds => nds.map(n => n.id === id ? { 
-                    ...n, 
-                    data: { ...n.data, image: extractedAssetUrl, threshold: newThreshold } 
-                  } : n));
-                } catch (err) {
-                  console.error(err);
+          {!hasThresholdConnection && (
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={threshold}
+              onChange={async (e) => {
+                const newThreshold = parseInt(e.target.value);
+                setThreshold(newThreshold);
+                
+                if (generatedUrl) {
+                  try {
+                    const extractedAssetUrl = await performChromaKey(generatedUrl, newThreshold);
+                    setImage(extractedAssetUrl);
+                    setNodes(nds => nds.map(n => n.id === id ? { 
+                      ...n, 
+                      data: { ...n.data, image: extractedAssetUrl, threshold: newThreshold } 
+                    } : n));
+                  } catch (err) {
+                    console.error(err);
+                  }
                 }
-              }
-            }}
-            className="nodrag w-full accent-indigo-500"
-          />
+              }}
+              className="nodrag w-full accent-indigo-500"
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2 relative z-20">
@@ -535,7 +582,7 @@ Spec: resolution:{resolution}. ratio 1:1.`;
 
         {/* Image Preview */}
         <div 
-          className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
+          className="w-full bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
           style={{
             backgroundImage: image ? `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)` : 'none',
             backgroundSize: '20px 20px'
@@ -581,7 +628,7 @@ Spec: resolution:{resolution}. ratio 1:1.`;
           <button 
             onClick={generateAsset}
             disabled={status !== 'idle' && status !== 'succeeded' && status !== 'failed'}
-            className="nodrag flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded shadow-lg flex items-center justify-center gap-1 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
           >
             <Play className="w-3 h-3 fill-current" />
             GENERATE & EXTRACT
@@ -589,7 +636,7 @@ Spec: resolution:{resolution}. ratio 1:1.`;
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
+      <Handle type="source" position={Position.Right} id="image" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

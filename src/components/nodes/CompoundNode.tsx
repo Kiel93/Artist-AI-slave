@@ -45,7 +45,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
           nodeOutputs[e.targetHandle] = { text: "", image: "" };
         }
         
-        const image = sourceNode.data.image|| "";
+        const image = sourceNode.data.image || sourceNode.data.outputImage || "";
         const text = sourceNode.data.text|| "";
 
         if (image) {
@@ -208,7 +208,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
                      type="target"
                      id={pinId}
                      position={Position.Left}
-                     className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px] ${pinType === 'image' ? '!bg-[#22c55e]' : '!bg-[#3b82f6]'}`}
+                     className={`!min-w-0 !min-h-0 rounded-full !left-[-24px]`} style={{ width: '16px', height: '16px', backgroundColor: pinType === 'image' ? '#22c55e' : '#3b82f6', borderColor: pinType === 'image' ? '#14532d' : '#1e3a8a', borderWidth: '2px' }}
                    />
                    <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">{pinLabel}</span>
                  </div>
@@ -226,7 +226,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
             e.stopPropagation();
             window.dispatchEvent(new CustomEvent('open-workspace', { detail: { id } }));
           }}
-          className="w-full py-1.5 mb-2 border border-purple-500/30 text-purple-300 text-xs font-bold uppercase tracking-widest rounded hover:bg-purple-500/10 transition-colors nodrag"
+          className="w-full py-1.5 mb-2 bg-transparent border border-purple-500/30 text-purple-300 text-xs font-bold uppercase tracking-widest rounded hover:bg-purple-500/10 transition-colors nodrag"
         >
           Open Editor
         </button>
@@ -234,7 +234,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
         <button 
           onClick={handleRunPipeline}
           disabled={isExecuting}
-          className="nodrag w-full py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+          className="nodrag w-full py-2.5 bg-purple-600 hover:bg-purple-500 border-b-4 border-purple-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
         >
           {isExecuting ? (
             <>
@@ -258,7 +258,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
 
         {/* Display final output image if available */}
         {data.image && (
-          <div className="w-full aspect-square bg-black/50 border border-purple-500/20 rounded overflow-hidden mt-2 relative group">
+          <div className="w-full bg-black/50 border border-purple-500/20 rounded overflow-hidden mt-2 relative group">
             <img src={data.image} className="w-full h-full object-contain" alt="Pipeline Output" />
             
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm z-10 pointer-events-none">
@@ -345,7 +345,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
               
               return (
                 <div key={pinId} className="flex flex-col gap-1.5 relative group/img">
-                  <div className="aspect-square bg-black/60 rounded border border-gray-700/50 overflow-hidden relative">
+                  <div className="bg-black/60 rounded border border-gray-700/50 overflow-hidden relative">
                     <img src={imageUrl as string} className="w-full h-full object-cover hover:scale-110 transition-transform duration-300" alt={label} />
                     
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm z-10 pointer-events-none">

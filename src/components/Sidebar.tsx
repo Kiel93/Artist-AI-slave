@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { get, set } from "idb-keyval";
-import { MessageSquare, Link2, Palette, Image as ImageIcon, Sparkles, ImageDown, PenTool, Box, Search, Scissors, Eraser, LogIn, LogOut, Layers, Trash2, Download, Upload } from "lucide-react";
+import { MessageSquare, Link2, Palette, Image as ImageIcon, Sparkles, ImageDown, PenTool, Box, Search, Scissors, Eraser, LogIn, LogOut, Layers, Trash2, Download, Upload, Hash } from "lucide-react";
 
 const NODE_TYPES = [
   {
@@ -42,6 +42,12 @@ const NODE_TYPES = [
     label: "Reference Image",
     icon: <ImageIcon className="w-5 h-5 text-green-400" />,
     description: "Upload local image references",
+  },
+  {
+    type: "value",
+    label: "Value Node",
+    icon: <Hash className="w-5 h-5 text-red-400" />,
+    description: "External numeric value driver",
   },
 
   {

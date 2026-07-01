@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Handle, Position, useReactFlow, useEdges } from "reactflow";
-import { Scissors, Download, Loader2 } from "lucide-react";
+import { Scissors, Download, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 export default function IsometricHexSlicerNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [slices, setSlices] = useState<{ name: string, url: string }[]>(data.slices || []);
   const [isProcessing, setIsProcessing] = useState(false);
   const [useWallCloning, setUseWallCloning] = useState(data.useWallCloning !== undefined ? data.useWallCloning : true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const { getNodes, setNodes } = useReactFlow();
   const allEdges = useEdges();
@@ -324,17 +325,24 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
         {/* Top Panel: Inputs */}
         <div className="flex flex-col gap-1 pb-1">
           <div className="relative flex items-center h-6">
-            <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+            <Handle type="target" position={Position.Left} id="image" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Tileset Image Input</span>
           </div>
         </div>
 
-        <div className="bg-black/30 p-4 border border-emerald-500/20 rounded min-h-[240px] flex items-center justify-center">
+        <div className="bg-black/30 p-4 border border-emerald-500/20 rounded min-h-[240px] flex flex-col relative">
           {slices.length > 0 ? (
-            <div className="grid grid-cols-4 gap-2 w-full max-h-96 overflow-y-auto pr-1 custom-scrollbar">
-              {slices.map((slice, idx) => (
+            <>
+              <button 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="absolute top-2 right-2 p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded transition-colors z-10"
+              >
+                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              <div className={`grid grid-cols-4 gap-2 w-full mt-4 transition-all duration-300 ${isExpanded ? '' : 'max-h-48 overflow-hidden'}`}>
+                {slices.map((slice, idx) => (
                 <div key={idx} className="flex flex-col items-center gap-1 group">
-                  <div className="aspect-square w-full border border-emerald-500/30 rounded overflow-hidden bg-black/50 relative block group/tile">
+                  <div className="w-full border border-emerald-500/30 rounded overflow-hidden bg-black/50 relative block group/tile">
                     <img src={slice.url} className="w-full h-full object-contain" alt={slice.name} />
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/tile:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                       <a
@@ -350,9 +358,15 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
                   <span className="text-[8px] text-emerald-200/60 truncate w-full text-center">{slice.name}</span>
                 </div>
               ))}
-            </div>
+              </div>
+              {!isExpanded && (
+                <div className="absolute bottom-4 left-0 right-0 h-12 bg-gradient-to-t from-[#1a1525] to-transparent pointer-events-none flex items-end justify-center pb-2 text-xs text-emerald-400/50">
+                  {slices.length > 8 ? `+${slices.length - 8} more` : ''}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="text-center">
+            <div className="text-center w-full my-auto">
               <Scissors className="w-10 h-10 text-emerald-500/20 mx-auto mb-2" />
               <p className="text-xs text-emerald-200/40">Connect an image, then click SLICE</p>
             </div>
@@ -374,14 +388,14 @@ export default function IsometricHexSlicerNode({ id, data, selected }: { id: str
         <button
           onClick={processImage}
           disabled={isProcessing}
-          className="nodrag w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+          className="nodrag w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
         >
           <Scissors className="w-4 h-4 fill-current" />
           SLICE 13 TILES
         </button>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
+      <Handle type="source" position={Position.Right} id="image-out" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

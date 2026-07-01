@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Handle, Position, useReactFlow } from "reactflow";
+import { useState, useEffect } from "react";
+import { Handle, Position, useReactFlow, useEdges, useNodes } from "reactflow";
 import { ImageIcon, Play, RefreshCw, AlertCircle, Download } from "lucide-react";
 import { executeNode } from "@/lib/node-executor";
 
@@ -11,6 +11,38 @@ export default function ShadowExtractorNode({ id, data, selected }: { id: string
   const [intensity, setIntensity] = useState<number>(data.intensity || 0);
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
+  const edges = useEdges();
+  const nodes = useNodes();
+
+  // Register limits
+  useEffect(() => {
+    if (!data.limits || !data.limits.intensity) {
+      setNodes(nds => nds.map(n => n.id === id ? { 
+        ...n, 
+        data: { ...n.data, limits: { ...n.data.limits, intensity: { min: -100, max: 100, step: 1 } } } 
+      } : n));
+    }
+  }, []);
+
+  // Handle external value connection
+  const intensityEdge = edges.find(e => e.target === id && e.targetHandle === 'intensity');
+  const intensitySourceNode = intensityEdge ? nodes.find(n => n.id === intensityEdge.source) : null;
+  const hasValueConnection = !!intensitySourceNode;
+
+  useEffect(() => {
+    const dataAny = intensitySourceNode?.data as any;
+    if (hasValueConnection && dataAny?.value !== undefined) {
+      let val = dataAny.value;
+      if (dataAny.mode === 'slider') {
+        val = -100 + (val / 100) * (100 - -100);
+      }
+      const clamped = Math.min(Math.max(val, -100), 100);
+      if (clamped !== intensity) {
+        setIntensity(clamped);
+        setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, intensity: clamped } } : n));
+      }
+    }
+  }, [hasValueConnection, (intensitySourceNode?.data as any)?.value, id, setNodes, intensity]);
 
   const extractShadow = async () => {
     // Gather Inputs
@@ -83,19 +115,14 @@ export default function ShadowExtractorNode({ id, data, selected }: { id: string
         {/* Top Panel: Inputs */}
         <div className="flex flex-col gap-1 pb-1">
           <div className="relative flex items-center h-6">
-            <Handle
-              type="target"
-              id="image"
-              position={Position.Left}
-              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
-            />
+            <Handle type="target" position={Position.Left} id="image" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Image Input</span>
           </div>
         </div>
 
         {/* Controls Panel */}
         <div className="space-y-3">
-          <div className="flex justify-between items-center">
+          <div className="relative flex justify-between items-center w-full">
             <span className="text-[10px] text-emerald-200 font-medium">Preview White BG</span>
             <label className="relative inline-flex items-center cursor-pointer">
               <input 
@@ -111,29 +138,35 @@ export default function ShadowExtractorNode({ id, data, selected }: { id: string
             </label>
           </div>
           
-          <div className="space-y-1">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] text-emerald-200 font-medium">Intensity</span>
-              <span className="text-[10px] font-bold text-emerald-400">{intensity}</span>
+          <div className="space-y-1 relative">
+            <div className="relative flex justify-between items-center w-full">
+            <Handle type="target" position={Position.Left} id="intensity" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#ef4444', borderColor: '#7f1d1d', borderWidth: '2px' }} />
+              <span className="text-[10px] text-emerald-200 font-medium ml-1">Intensity</span>
+              <span className="text-[10px] font-bold text-emerald-400">
+                {Number(intensity.toFixed(2))} {hasValueConnection && <span className="font-normal text-emerald-200 ml-1">(-100/100)</span>}
+              </span>
             </div>
-            <input
-              type="range"
-              min="-100"
-              max="100"
-              value={intensity}
-              onChange={(e) => {
-                const val = parseInt(e.target.value);
-                setIntensity(val);
-                setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, intensity: val } } : n));
-              }}
-              className="nodrag w-full accent-emerald-500"
-            />
+            
+            {!hasValueConnection && (
+              <input
+                type="range"
+                min="-100"
+                max="100"
+                value={intensity}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setIntensity(val);
+                  setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, intensity: val } } : n));
+                }}
+                className="nodrag w-full accent-emerald-500"
+              />
+            )}
           </div>
         </div>
 
         {/* Image Preview with checkerboard pattern to show transparency */}
         <div 
-          className="w-full aspect-square border border-emerald-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
+          className="w-full border border-emerald-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group"
           style={{
             backgroundColor: previewWhiteBg ? '#ffffff' : 'transparent',
             backgroundImage: previewWhiteBg ? 'none' : `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`,
@@ -177,7 +210,7 @@ export default function ShadowExtractorNode({ id, data, selected }: { id: string
           <button 
             onClick={extractShadow}
             disabled={status === 'processing'}
-            className="nodrag flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
           >
             <Play className="w-4 h-4 fill-current" />
             PROCESS
@@ -185,7 +218,7 @@ export default function ShadowExtractorNode({ id, data, selected }: { id: string
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
+      <Handle type="source" position={Position.Right} id="image" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

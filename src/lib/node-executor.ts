@@ -2,6 +2,7 @@ import { fetchNodePrompt } from "@/lib/plenxai";
 import { generateTextUniversal, explainImageUniversal } from "@/lib/llm-router";
 import { queueImageGen, getTaskStatus, uploadMediaDirect } from "@/lib/plenxai";
 import { removeBackground as imglyRemoveBackground } from "@imgly/background-removal";
+import { executeImageEditorNode } from "./nodes/image-editor-executor";
 
 // Generic types for the executor
 export type NodeExecutionContext = {
@@ -293,87 +294,7 @@ export const executeShadowExtractorNode = async (nodeData: any, inputs: NodeExec
   });
 };
 
-export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
-  const layers = nodeData.layers || [];
-  if (layers.length === 0) return { success: true, data: { image: null } };
 
-  // Load all images
-  const loadedImages: { layer: any; img: HTMLImageElement; width: number; height: number }[] = [];
-  
-  for (const layer of layers) {
-    const imageUrl = inputs.namedInputs?.[layer.handleId]?.image;
-    if (imageUrl) {
-      try {
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const image = new Image();
-          image.crossOrigin = "anonymous";
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-          image.src = imageUrl;
-        });
-        loadedImages.push({ layer, img, width: img.width, height: img.height });
-      } catch (e) {
-        console.warn(`Failed to load image for layer ${layer.handleId}`);
-      }
-    }
-  }
-
-  if (loadedImages.length === 0) return { success: true, data: { image: null } };
-
-  // Determine canvas size: largest width and largest height among all images
-  // Wait, user said "fit the largest detectable image". Let's use max width and max height of any loaded image.
-  let maxWidth = 0;
-  let maxHeight = 0;
-  for (const { width, height } of loadedImages) {
-    if (width > maxWidth) maxWidth = width;
-    if (height > maxHeight) maxHeight = height;
-  }
-
-  // Draw composition
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = maxWidth;
-    canvas.height = maxHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return { success: false, error: "Canvas 2D unsupported." };
-
-    // Sort layers by zIndex
-    loadedImages.sort((a, b) => a.layer.zIndex - b.layer.zIndex);
-
-    for (const { layer, img, width, height } of loadedImages) {
-      ctx.save();
-      
-      // The origin of transformation should be the center of the canvas + layer translation
-      // Default: layer centered on canvas
-      const centerX = maxWidth / 2 + (layer.x || 0);
-      const centerY = maxHeight / 2 + (layer.y || 0);
-      
-      ctx.translate(centerX, centerY);
-      if (layer.rotation) {
-        ctx.rotate((layer.rotation * Math.PI) / 180);
-      }
-      
-      const scaleX = layer.scaleX !== undefined ? layer.scaleX : (layer.scale !== undefined ? layer.scale : 1);
-      const scaleY = layer.scaleY !== undefined ? layer.scaleY : (layer.scale !== undefined ? layer.scale : 1);
-      if (scaleX !== 1 || scaleY !== 1) {
-        ctx.scale(scaleX, scaleY);
-      }
-      
-      if (layer.opacity !== undefined) {
-        ctx.globalAlpha = layer.opacity;
-      }
-      
-      // Draw image centered at the translated origin
-      ctx.drawImage(img, -width / 2, -height / 2, width, height);
-      
-      ctx.restore();
-    }
-
-    return { success: true, data: { image: canvas.toDataURL("image/png") } };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Compositing failed." };
-  }
-};
 
 export const executePromptConnectorNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
   const handles = nodeData.handles && nodeData.handles.length > 0 ? nodeData.handles : ["text-h0", "text-h1"];

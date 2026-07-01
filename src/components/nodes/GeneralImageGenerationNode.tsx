@@ -78,7 +78,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
         hasTextConnectionGen = true;
         incomingTextInput = sourceNode.data.text || sourceNode.data.outputText || "";
       } else if (edge.targetHandle?.startsWith('image-') || edge.targetHandle?.startsWith('img-')) {
-        const image = sourceNode.data.image || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
+        const image = sourceNode.data.image || sourceNode.data.outputImage || sourceNode.data.referenceImage || sourceNode.data.bakedImage;
         if (image) imageInputsGen.push(image);
         if (sourceNode.data.images && Array.isArray(sourceNode.data.images)) {
           imageInputsGen.push(...sourceNode.data.images);
@@ -160,7 +160,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
       <div className="p-4 space-y-3">
         {/* Prompt Input */}
         <div className="relative pb-2">
-          <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
+          <Handle type="target" position={Position.Left} id="text" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
           {!hasTextConnection ? (
             <textarea
               className="nodrag text-xs w-full bg-black/40 text-gray-200 p-2 rounded border border-blue-500/20 focus:border-blue-500/60 focus:outline-none resize-none"
@@ -199,10 +199,11 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
                       type="target"
                       position={Position.Left}
                       id={h.id}
-                      className="!w-5 !h-5 !bg-[#22c55e] !border-none !flex !items-center !justify-center !min-w-0 !min-h-0 cursor-crosshair hover:scale-110 transition-transform shadow-md !left-[-24px]"
+                      className="!min-w-0 !min-h-0 rounded-full !left-[-24px] cursor-crosshair hover:scale-110 transition-transform shadow-md !flex items-center justify-center"
+                      style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }}
                       title="Drop wire here to add a new image input"
                     >
-                      <span className="text-[#151b25] font-black text-lg leading-none mt-[-2px] ml-[1px]">+</span>
+                      <span className="text-[#151b25] font-black text-[14px] leading-none mt-[-1px]">+</span>
                     </Handle>
                     <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Add Image</span>
                   </div>
@@ -215,8 +216,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
                     type="target"
                     id={h.id}
                     position={Position.Left}
-                    style={{ backgroundColor: h.color }}
-                    className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px]`}
+                    className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: h.color, borderColor: '#14532d', borderWidth: '2px' }}
                   />
                   <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">
                     Reference Image
@@ -262,7 +262,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
         </div>
         
         {/* Bottom Panel: Image Preview */}
-        <div className="w-full aspect-square bg-black/50 border border-blue-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group">
+        <div className="w-full bg-black/50 border border-blue-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group">
           {image ? (
             <>
               <img src={image} className="w-full h-full object-contain" alt="generated" />
@@ -304,7 +304,8 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
           <button 
             onClick={generateImage}
             disabled={status === 'queueing' || status === 'polling'}
-            className="nodrag flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            style={{ backgroundColor: '#d97706', borderColor: '#92400e' }}
+            className="nodrag w-full py-2.5 border-b-4 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
           >
             <Play className="w-4 h-4 fill-current" />
             GENERATE
@@ -312,7 +313,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
+      <Handle type="source" position={Position.Right} id="image-out" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

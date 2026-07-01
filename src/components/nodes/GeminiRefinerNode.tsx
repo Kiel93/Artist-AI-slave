@@ -94,21 +94,11 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
         {/* Top Panel: Inputs */}
         <div className="flex flex-col gap-1 pb-1">
           <div className="relative flex items-center h-6">
-            <Handle
-              type="target"
-              id="text"
-              position={Position.Left}
-              className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !left-[-24px]"
-            />
+            <Handle type="target" position={Position.Left} id="text" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Prompt Input</span>
           </div>
           <div className="relative flex items-center h-6">
-            <Handle
-              type="target"
-              id="image"
-              position={Position.Left}
-              className="!w-4 !h-4 !bg-[#22c55e] !border-none !min-w-0 !min-h-0 !left-[-24px]"
-            />
+            <Handle type="target" position={Position.Left} id="image" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Reference Image</span>
           </div>
         </div>
@@ -163,7 +153,7 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
         <button 
           onClick={handleRefine}
           disabled={isRefining}
-          className="nodrag w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+          className="nodrag w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
         >
           {isRefining ? "Polishing..." : "REFINE PROMPT"}
         </button>
@@ -171,12 +161,7 @@ export default function GeminiRefinerNode({ id, data, selected }: { id: string; 
       </div>
 
       {/* Output */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="text"
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !right-[-10px]"
-      />
+      <Handle type="source" position={Position.Right} id="text" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
     </div>
   );
 }

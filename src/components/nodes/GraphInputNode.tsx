@@ -70,7 +70,7 @@ export default function GraphInputNode({ id, data, selected }: { id: string; dat
         type="source"
         position={Position.Right}
         id={inputType} // The source handle emits the selected type
-        className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !right-[-10px] ${pinColor}`}
+        className={`!min-w-0 !min-h-0 rounded-full !right-[-10px]`} style={{ width: '16px', height: '16px', backgroundColor: pinColor.includes('blue') ? '#3b82f6' : pinColor.includes('emerald') ? '#22c55e' : pinColor.includes('red') ? '#ef4444' : '#a855f7', borderColor: pinColor.includes('blue') ? '#1e3a8a' : pinColor.includes('emerald') ? '#14532d' : pinColor.includes('red') ? '#7f1d1d' : '#581c87', borderWidth: '2px' }}
       />
     </div>
   );

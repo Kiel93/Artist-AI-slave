@@ -147,10 +147,7 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
                   type="target"
                   position={Position.Left}
                   id={hId}
-                  className={`!w-4 !h-4 !bg-blue-500 !border-none !min-w-0 !min-h-0 !left-[-24px] transition-all duration-200 ${
-                    isConnected ? "!scale-110" : ""
-                  }`}
-                  style={{ top: "50%", transform: "translateY(-50%)" }}
+                  className={`!min-w-0 !min-h-0 rounded-full !left-[-24px] transition-all duration-200 ${isConnected ? "!scale-110" : ""}`} style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px', top: '50%', transform: 'translateY(-50%)' }}
                   title={`Input ${hId}`}
                 />
 
@@ -188,22 +185,17 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
             type="target"
             position={Position.Left}
             id="text-plus"
-            className="!w-5 !h-5 !bg-blue-500 !border-none !flex !items-center !justify-center !min-w-0 !min-h-0 !left-[-24px] cursor-crosshair hover:scale-110 transition-transform shadow-md"
-            style={{ top: '50%', transform: 'translateY(-50%)' }}
+            className="!min-w-0 !min-h-0 rounded-full !left-[-24px] cursor-crosshair hover:scale-110 transition-transform shadow-md !flex items-center justify-center"
+            style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px', top: '50%', transform: 'translateY(-50%)' }}
             title="Drop wire here to add a new input"
           >
-            <span className="text-[#121826] font-black text-lg leading-none mt-[-2px] ml-[1px]">+</span>
+            <span className="text-[#121826] font-black text-[14px] leading-none mt-[-1px]">+</span>
           </Handle>
         </div>
       </div>
 
       {/* Main Output Handle */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="text"
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !right-[-10px]"
-      />
+      <Handle type="source" position={Position.Right} id="text" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
     </div>
   );
 }

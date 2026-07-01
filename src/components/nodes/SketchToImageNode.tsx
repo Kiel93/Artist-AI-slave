@@ -30,12 +30,7 @@ export default function SketchToImageNode({ id, data, selected }: { id: string; 
           Applies strict constraints to the generator to follow your connected reference image exactly as a sketch/paintover.
         </p>
       </div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="text"
-        className="!w-4 !h-4 !bg-[#3b82f6] !border-none !min-w-0 !min-h-0 !right-[-10px]"
-      />
+      <Handle type="source" position={Position.Right} id="text" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
     </div>
   );
 }

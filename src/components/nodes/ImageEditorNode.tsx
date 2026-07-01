@@ -4,7 +4,7 @@ import { ImageIcon, Layers } from "lucide-react";
 
 export default function ImageEditorNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [image, setImage] = useState<string | null>(data.image || data.outputImage || null);
-  const imageInputs = data.imageInputs || [];
+  const imageInputs = data.imageInputs && data.imageInputs.length > 0 ? data.imageInputs : ["image-0"];
   
   useEffect(() => {
     if (data.outputImage && data.outputImage !== image) {
@@ -26,29 +26,28 @@ export default function ImageEditorNode({ id, data, selected }: { id: string; da
       <div className="p-4 space-y-3 relative z-10">
         {/* Dynamic Handles */}
         <div className="flex flex-col gap-2 relative">
-          {imageInputs.length === 0 ? (
-             <div className="text-[10px] text-gray-400 italic mb-1 mt-1">Connect images to +</div>
-          ) : (
-            imageInputs.map((handleId: string, index: number) => (
-              <div key={handleId} className="relative flex items-center h-6">
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={handleId}
-                  className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]"
-                />
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Layer {index + 1}</span>
-              </div>
-            ))
-          )}
+          {imageInputs.map((handleId: string, index: number) => (
+            <div key={handleId} className="relative flex items-center h-6">
+              <Handle
+                type="target"
+                position={Position.Left}
+                id={handleId}
+                className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }}
+              />
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">
+                {index === 0 ? "Input Image" : `Layer ${index + 1}`}
+              </span>
+            </div>
+          ))}
           <div className="relative flex items-center h-6">
             <Handle
               type="target"
               position={Position.Left}
               id="image-plus"
-              className="!w-4 !h-4 !bg-[#22c55e] !border-none flex items-center justify-center font-bold text-[10px] text-black !left-[-24px]"
+              className="!min-w-0 !min-h-0 rounded-full !left-[-24px] cursor-crosshair hover:scale-110 transition-transform shadow-md !flex items-center justify-center"
+              style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }}
             >
-              +
+              <span className="text-[#151b25] font-black text-[14px] leading-none mt-[-1px]">+</span>
             </Handle>
           </div>
         </div>
@@ -59,14 +58,14 @@ export default function ImageEditorNode({ id, data, selected }: { id: string; da
             e.stopPropagation();
             window.dispatchEvent(new CustomEvent('open-workspace', { detail: { id } }));
           }}
-          className="w-full mb-3 py-1.5 border border-emerald-500/30 text-emerald-300 text-xs font-bold uppercase tracking-widest rounded hover:bg-emerald-500/10 transition-colors nodrag"
+          className="w-full mb-3 py-1.5 bg-transparent border border-emerald-500/30 text-emerald-300 text-xs font-bold uppercase tracking-widest rounded hover:bg-emerald-500/10 transition-colors nodrag"
         >
           Open Editor
         </button>
 
         {/* Image Preview */}
         <div 
-          className="w-full aspect-square border border-emerald-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative"
+          className="w-full border border-emerald-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative"
           style={{
             backgroundImage: `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`,
             backgroundSize: '20px 20px'
@@ -82,7 +81,7 @@ export default function ImageEditorNode({ id, data, selected }: { id: string; da
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px] z-30" />
+      <Handle type="source" position={Position.Right} id="image" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

@@ -48,7 +48,7 @@ export default function GraphOutputNode({ id, data, selected }: { id: string; da
               type="target"
               position={Position.Left}
               id={outputType}
-              className={`!w-4 !h-4 !border-none !min-w-0 !min-h-0 !left-[-24px] ${pinColor}`}
+              className={`!min-w-0 !min-h-0 rounded-full !left-[-24px]`} style={{ width: '16px', height: '16px', backgroundColor: pinColor.includes('blue') ? '#3b82f6' : pinColor.includes('emerald') ? '#22c55e' : pinColor.includes('red') ? '#ef4444' : '#a855f7', borderColor: pinColor.includes('blue') ? '#1e3a8a' : pinColor.includes('emerald') ? '#14532d' : pinColor.includes('red') ? '#7f1d1d' : '#581c87', borderWidth: '2px' }}
             />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Input</span>
           </div>

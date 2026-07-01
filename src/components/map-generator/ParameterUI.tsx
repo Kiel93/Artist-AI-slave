@@ -832,11 +832,11 @@ function ObjectSettingsPanel({ objId, objectAssets, updateObjectAsset, removeObj
             <div>
               <div className="flex justify-between mb-1">
                 <label className="text-xs text-gray-400 flex items-center gap-1"><Scaling className="w-3 h-3" /> Scale</label>
-                <span className="text-xs text-indigo-300">{(asset.scale || 1.0).toFixed(1)}x</span>
+                <span className="text-xs text-indigo-300">{(asset.scale || 1.0).toFixed(2)}x</span>
               </div>
               <input
                 type="range"
-                min="0.1" max="2.0" step="0.1"
+                min="0.1" max="2.0" step="0.01"
                 value={asset.scale || 1.0}
                 onChange={(e) => updateObjectAsset(asset.id, { scale: parseFloat(e.target.value) })}
                 className="w-full accent-indigo-500"

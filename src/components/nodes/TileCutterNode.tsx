@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, MouseEvent as ReactMouseEvent, WheelEvent } from "react";
-import { Handle, Position, useReactFlow, useEdges } from "reactflow";
+import { Handle, Position, useReactFlow, useEdges, useNodes } from "reactflow";
 import { Scissors, Download, Eye, ChevronUp, ChevronDown } from "lucide-react";
 
 export default function TileCutterNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
@@ -20,11 +20,87 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
   const incomingEdges = allEdges.filter(e => e.target === id && e.targetHandle === 'image');
 
   const edge = incomingEdges.length > 0 ? incomingEdges[0] : null;
-  const sourceNode = edge ? getNodes().find(n => n.id === edge.source) : null;
-  let imageUrl = sourceNode?.data?.image || sourceNode?.data?.resultUrl || sourceNode?.data?.imageUrl;
-  if (sourceNode?.data?.images && edge?.sourceHandle) {
-    imageUrl = sourceNode.data.images[edge.sourceHandle] || imageUrl;
+  const nodes = useNodes();
+  const sourceNode = edge ? nodes.find(n => n.id === edge.source) : null;
+  const sourceDataAny = sourceNode?.data as any;
+  let imageUrl = sourceDataAny?.image || sourceDataAny?.outputImage || sourceDataAny?.resultUrl || sourceDataAny?.imageUrl;
+  if (sourceDataAny?.images && edge?.sourceHandle) {
+    imageUrl = sourceDataAny.images[edge.sourceHandle] || imageUrl;
   }
+
+  // Register limits
+  useEffect(() => {
+    if (!data.limits || !data.limits.zoom) {
+      setNodes(nds => nds.map(n => n.id === id ? { 
+        ...n, 
+        data: { ...n.data, limits: { 
+            ...n.data.limits, 
+            zoom: { min: 100, max: 1000, step: 1 },
+            opacity: { min: 0, max: 1, step: 0.1 },
+            feather: { min: 1, max: 5, step: 1 }
+        } } 
+      } : n));
+    }
+  }, []);
+
+  const zoomEdge = allEdges.find(e => e.target === id && e.targetHandle === 'zoom');
+  const zoomSourceNode = zoomEdge ? nodes.find(n => n.id === zoomEdge.source) : null;
+  const hasZoomConnection = !!zoomSourceNode;
+  
+  const opacityEdge = allEdges.find(e => e.target === id && e.targetHandle === 'opacity');
+  const opacitySourceNode = opacityEdge ? nodes.find(n => n.id === opacityEdge.source) : null;
+  const hasOpacityConnection = !!opacitySourceNode;
+  
+  const featherEdge = allEdges.find(e => e.target === id && e.targetHandle === 'feather');
+  const featherSourceNode = featherEdge ? nodes.find(n => n.id === featherEdge.source) : null;
+  const hasFeatherConnection = !!featherSourceNode;
+
+  useEffect(() => {
+    let shouldUpdate = false;
+    let newZoom = zoom;
+    let newOpacity = opacity;
+    let newFeather = feather;
+
+    const zoomDataAny = zoomSourceNode?.data as any;
+    const opacityDataAny = opacitySourceNode?.data as any;
+    const featherDataAny = featherSourceNode?.data as any;
+
+    if (hasZoomConnection && zoomDataAny?.value !== undefined) {
+      let val = zoomDataAny.value;
+      if (zoomDataAny.mode === 'slider') {
+        val = 100 + (val / 100) * (1000 - 100);
+      }
+      val = Math.min(Math.max(val, 100), 1000);
+      if (!isNaN(val) && Math.abs(val - zoom) > 0.001) { newZoom = val; shouldUpdate = true; }
+    }
+    if (hasOpacityConnection && opacityDataAny?.value !== undefined) {
+      let val = opacityDataAny.value;
+      if (opacityDataAny.mode === 'slider') {
+        val = 0 + (val / 100) * (1 - 0);
+      }
+      val = Math.min(Math.max(val, 0), 1);
+      if (!isNaN(val) && Math.abs(val - opacity) > 0.001) { newOpacity = val; shouldUpdate = true; }
+    }
+    if (hasFeatherConnection && featherDataAny?.value !== undefined) {
+      let val = featherDataAny.value;
+      if (featherDataAny.mode === 'slider') {
+        val = 1 + (val / 100) * (5 - 1);
+      }
+      val = Math.min(Math.max(val, 1), 5);
+      if (!isNaN(val) && Math.abs(val - feather) > 0.001) { newFeather = val; shouldUpdate = true; }
+    }
+
+    if (shouldUpdate) {
+      setZoom(newZoom);
+      setOpacity(newOpacity);
+      setFeather(newFeather);
+    }
+  }, [
+    hasZoomConnection, (zoomSourceNode?.data as any)?.value, (zoomSourceNode?.data as any)?.mode, zoom,
+    hasOpacityConnection, (opacitySourceNode?.data as any)?.value, (opacitySourceNode?.data as any)?.mode, opacity,
+    hasFeatherConnection, (featherSourceNode?.data as any)?.value, (featherSourceNode?.data as any)?.mode, feather,
+    id, setNodes
+  ]);
 
   const renderPreview = () => {
     const canvas = canvasRef.current;
@@ -192,7 +268,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
         {/* Top Panel: Inputs */}
         <div className="flex flex-col gap-1">
           <div className="relative flex items-center h-6">
-            <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+            <Handle type="target" position={Position.Left} id="image" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">Image Input</span>
           </div>
         </div>
@@ -201,28 +277,43 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
       {isExpanded && (
         <div className="p-4 space-y-4 pt-2">
           <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs text-emerald-200/80 mb-1">
-                <span>Zoom</span>
-                <span>{Math.round(zoom)}%</span>
+            <div className="space-y-1 relative">
+              <div className="relative flex justify-between items-center w-full">
+                <Handle type="target" position={Position.Left} id="zoom" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#ef4444', borderColor: '#7f1d1d', borderWidth: '2px' }} />
+                <span className="text-xs text-emerald-200/80 mb-1 ml-1 font-medium">Zoom</span>
+                <span className="text-xs text-emerald-200/80 mb-1">
+                  {Number(zoom.toFixed(2))}% {hasZoomConnection && '(100/1000)'}
+                </span>
               </div>
-              <input type="range" min="100" max="1000" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
+              {!hasZoomConnection && (
+                <input type="range" min="100" max="1000" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
+              )}
             </div>
 
-            <div>
-              <div className="flex justify-between text-xs text-emerald-200/80 mb-1">
-                <span>Mask Opacity</span>
-                <span>{Math.round(opacity * 100)}%</span>
+            <div className="space-y-1 relative">
+              <div className="relative flex justify-between items-center w-full">
+                <Handle type="target" position={Position.Left} id="opacity" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#ef4444', borderColor: '#7f1d1d', borderWidth: '2px' }} />
+                <span className="text-xs text-emerald-200/80 mb-1 ml-1 font-medium">Mask Opacity</span>
+                <span className="text-xs text-emerald-200/80 mb-1">
+                  {Number((opacity * 100).toFixed(2))}% {hasOpacityConnection && '(0/100)'}
+                </span>
               </div>
-              <input type="range" min="0" max="1" step="0.1" value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
+              {!hasOpacityConnection && (
+                <input type="range" min="0" max="1" step="0.1" value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
+              )}
             </div>
 
-            <div>
-              <div className="flex justify-between text-xs text-emerald-200/80 mb-1">
-                <span>Feather (px)</span>
-                <span>{feather}</span>
+            <div className="space-y-1 relative">
+              <div className="relative flex justify-between items-center w-full">
+                <Handle type="target" position={Position.Left} id="feather" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#ef4444', borderColor: '#7f1d1d', borderWidth: '2px' }} />
+                <span className="text-xs text-emerald-200/80 mb-1 ml-1 font-medium">Feather (px)</span>
+                <span className="text-xs text-emerald-200/80 mb-1">
+                  {Number(feather.toFixed(2))} {hasFeatherConnection && '(1/5)'}
+                </span>
               </div>
-              <input type="range" min="1" max="5" value={feather} onChange={(e) => setFeather(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
+              {!hasFeatherConnection && (
+                <input type="range" min="1" max="5" value={feather} onChange={(e) => setFeather(Number(e.target.value))} className="nodrag w-full accent-emerald-500" />
+              )}
             </div>
           </div>
 
@@ -270,7 +361,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
             <button
               onClick={handleCut}
               disabled={!imageUrl}
-              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+              className="nodrag flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
             >
               <Scissors className="w-4 h-4" />
               CUT
@@ -279,7 +370,7 @@ export default function TileCutterNode({ id, data, selected }: { id: string; dat
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} id="image-out" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
+      <Handle type="source" position={Position.Right} id="image-out" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }

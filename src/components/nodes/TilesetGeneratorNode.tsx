@@ -62,7 +62,7 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
         styleInput = sourceNode.data.text|| "";
       }
       if (edge.targetHandle === 'image') {
-        inputImageUrl = sourceNode.data.image|| "";
+        inputImageUrl = sourceNode.data.image || sourceNode.data.outputImage || "";
       }
     });
 
@@ -247,7 +247,7 @@ View: Strict 30-degree isometric.`;
       
       <div className="p-4 space-y-3">
         <div className="relative">
-          <Handle type="target" position={Position.Left} id="text" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px] top-1/2" />
+          <Handle type="target" position={Position.Left} id="text" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
           {!hasTextConnection ? (
             <textarea
               className="nodrag text-xs w-full bg-black/40 p-2 rounded border focus:outline-none resize-none text-gray-200 border-indigo-500/20 focus:border-indigo-500/60"
@@ -265,11 +265,11 @@ View: Strict 30-degree isometric.`;
 
         <div className="flex flex-col gap-1">
           <div className="relative flex items-center h-6">
-            <Handle type="target" position={Position.Left} id="style" className="!w-4 !h-4 !bg-[#3b82f6] !border-none !left-[-24px]" />
+            <Handle type="target" position={Position.Left} id="style" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#3b82f6', borderColor: '#1e3a8a', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Style Input</span>
           </div>
           <div className="relative flex items-center h-6">
-            <Handle type="target" position={Position.Left} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !left-[-24px]" />
+            <Handle type="target" position={Position.Left} id="image" className="!min-w-0 !min-h-0 rounded-full !left-[-24px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Blueprint Image</span>
           </div>
         </div>
@@ -309,7 +309,7 @@ View: Strict 30-degree isometric.`;
         </div>
 
         {/* Image Preview */}
-        <div className="w-full aspect-square bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group">
+        <div className="w-full bg-black/50 border border-indigo-500/20 rounded overflow-hidden flex flex-col items-center justify-center relative group">
           {image ? (
             <>
               <img src={image} className="w-full h-full object-contain" alt="generated tileset" />
@@ -353,7 +353,7 @@ View: Strict 30-degree isometric.`;
             {showApiPrompt ? "Hide API Prompt" : "View API Prompt"}
           </button>
           {showApiPrompt && (
-            <div className="mt-2 p-2 bg-black/60 border border-indigo-500/30 rounded text-[10px] text-indigo-200/80 break-words leading-relaxed max-h-24 overflow-y-auto">
+            <div className="mt-2 p-2 bg-black/60 border border-indigo-500/30 rounded text-[10px] text-indigo-200/80 break-words leading-relaxed">
               {apiPromptPreview || "Generate first to see the full API prompt..."}
             </div>
           )}
@@ -363,7 +363,7 @@ View: Strict 30-degree isometric.`;
           <button 
             onClick={generateImage}
             disabled={status === 'queueing' || status === 'polling'}
-            className="nodrag flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+            className="nodrag flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
           >
             <Play className="w-4 h-4 fill-current" />
             GENERATE
@@ -371,7 +371,7 @@ View: Strict 30-degree isometric.`;
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="image" className="!w-4 !h-4 !bg-[#22c55e] !border-none !right-[-10px]" />
+      <Handle type="source" position={Position.Right} id="image" className="!min-w-0 !min-h-0 rounded-full !right-[-10px]" style={{ width: '16px', height: '16px', backgroundColor: '#22c55e', borderColor: '#14532d', borderWidth: '2px' }} />
     </div>
   );
 }
