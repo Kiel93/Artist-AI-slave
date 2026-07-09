@@ -8,11 +8,13 @@ const MODELS = [
   { id: "nano-banana-full", name: "Nano Banana Full" },
   { id: "nano-banana-2", name: "Nano Banana 2" },
   { id: "kling-o1-image", name: "Kling O1 Image" },
+  { id: "image-gen-4", name: "Image Gen 4" },
   { id: "flux-2-pro", name: "Flux 2 Pro" },
   { id: "seedream-5-lite", name: "Seedream 5 Lite" },
-  { id: "seedream-4-5", name: "Seedream 4.5" },
+  { id: "seedream-4.5", name: "Seedream 4.5" },
   { id: "grok-image", name: "Grok Image" },
-  { id: "gpt-image-2", name: "GPT Image 2" }
+  { id: "gpt-image-2", name: "GPT Image 2" },
+  { id: "kling-3.0-omni-image", name: "Kling 3.0 Omni Image" }
 ];
 
 export default function TilesetGeneratorNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {

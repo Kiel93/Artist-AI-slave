@@ -569,6 +569,20 @@ function InspectorPanel({ layer, image, onChange, globalSelection, onApplyMask, 
                   <input type="number" step="0.1" value={parseFloat((layer.scaleY || 1).toFixed(3))} onChange={(e) => onChange({ scaleY: Number(e.target.value) })} className="w-full bg-black/50 border border-white/10 hover:border-emerald-500/50 focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono outline-none transition-colors" />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button 
+                  onClick={() => onChange({ scaleX: -(layer.scaleX || 1) })}
+                  className="bg-white/5 hover:bg-white/10 border border-white/10 rounded py-1 text-[10px] text-gray-300 font-bold uppercase transition-colors"
+                >
+                  Flip H
+                </button>
+                <button 
+                  onClick={() => onChange({ scaleY: -(layer.scaleY || 1) })}
+                  className="bg-white/5 hover:bg-white/10 border border-white/10 rounded py-1 text-[10px] text-gray-300 font-bold uppercase transition-colors"
+                >
+                  Flip V
+                </button>
+              </div>
               <div>
                 <label className="text-[10px] text-gray-500 uppercase block mb-1">Rotation (deg)</label>
                 <input type="number" value={Math.round(layer.rotation || 0)} onChange={(e) => onChange({ rotation: Number(e.target.value) })} className="w-full bg-black/50 border border-white/10 hover:border-emerald-500/50 focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono outline-none transition-colors" />

@@ -281,10 +281,17 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
         if (selectedNodes.length > 0) {
           copiedNodesRef.current = selectedNodes;
           const selectedNodeIds = new Set(selectedNodes.map(n => n.id));
-          copiedEdgesRef.current = edgesRef.current.filter(edge =>
+          const selectedEdges = edgesRef.current.filter(edge =>
             selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
           );
-          navigator.clipboard.writeText('APP_NODES_COPIED').catch(() => {});
+          copiedEdgesRef.current = selectedEdges;
+          
+          const clipboardData = {
+            type: 'artist-assistant-nodes',
+            nodes: selectedNodes,
+            edges: selectedEdges
+          };
+          navigator.clipboard.writeText(JSON.stringify(clipboardData)).catch(() => {});
         }
       }
     };
@@ -347,10 +354,31 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
       }
 
       const textData = e.clipboardData.getData('text');
-      if (!hasImage && textData === 'APP_NODES_COPIED' && copiedNodesRef.current && copiedNodesRef.current.length > 0) {
+      let pastedNodes = null;
+      let pastedEdges = null;
+
+      if (!hasImage && textData) {
+        try {
+          const parsed = JSON.parse(textData);
+          if (parsed && parsed.type === 'artist-assistant-nodes' && Array.isArray(parsed.nodes)) {
+            pastedNodes = parsed.nodes;
+            pastedEdges = parsed.edges || [];
+          }
+        } catch (err) {
+          // Ignore, not our JSON format
+        }
+        
+        // Fallback for backwards compatibility with the previous tab-local copy implementation
+        if (!pastedNodes && textData === 'APP_NODES_COPIED' && copiedNodesRef.current) {
+          pastedNodes = copiedNodesRef.current;
+          pastedEdges = copiedEdgesRef.current || [];
+        }
+      }
+
+      if (pastedNodes && pastedNodes.length > 0) {
         saveHistory();
         const idMapping = new Map<string, string>();
-        const newNodes = copiedNodesRef.current.map(n => {
+        const newNodes = pastedNodes.map((n: Node) => {
           const newId = getId();
           idMapping.set(n.id, newId);
           const newData = JSON.parse(JSON.stringify(n.data));
@@ -363,7 +391,7 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
           };
         });
 
-        let finalizedNewNodes = newNodes.map(n => {
+        let finalizedNewNodes = newNodes.map((n: Node) => {
           if (n.parentId) {
             if (idMapping.has(n.parentId)) {
               return { ...n, parentId: idMapping.get(n.parentId) };
@@ -375,7 +403,7 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
           return n;
         });
 
-        const newEdges = copiedEdgesRef.current.map(edge => ({
+        const newEdges = (pastedEdges || []).map((edge: Edge) => ({
           ...edge,
           id: `e-${getId()}`,
           source: idMapping.get(edge.source) || edge.source,
@@ -833,6 +861,47 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
     (event: React.DragEvent) => {
       event.preventDefault();
 
+      const files = event.dataTransfer.files;
+      if (files && files.length > 0) {
+        let hasImage = false;
+        for (let i = 0; i < files.length; i++) {
+          if (files[i].type.startsWith("image/")) {
+            hasImage = true;
+            const file = files[i];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const url = e.target?.result as string;
+              let position = { x: 100, y: 100 };
+              if (reactFlowInstance) {
+                if (typeof reactFlowInstance.screenToFlowPosition === 'function') {
+                  position = reactFlowInstance.screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                } else if (typeof reactFlowInstance.project === 'function') {
+                  position = reactFlowInstance.project({
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                }
+              }
+              const newNode = {
+                id: getId(),
+                type: 'referenceImage',
+                position: { x: position.x - 128, y: position.y - 128 },
+                data: { image: url }
+              };
+              setNodes((nds) => [...nds.map(n => ({...n, selected: false})), { ...newNode, selected: true }]);
+            };
+            reader.readAsDataURL(file);
+          }
+        }
+        if (hasImage) {
+          saveHistory();
+          return;
+        }
+      }
+
       const customDataStr = event.dataTransfer.getData("application/reactflow-custom");
       if (customDataStr) {
         saveHistory();
@@ -1013,6 +1082,7 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
       <>
         <ReactFlowProvider>
           <ReactFlow
+          key={graphPath.length === 0 ? 'root' : graphPath[graphPath.length - 1].id}
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}

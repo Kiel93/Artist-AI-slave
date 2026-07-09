@@ -36,7 +36,7 @@ export default function AssetManager({
 }: AssetManagerProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importType, setImportType] = useState<'ground' | 'ocean' | 'object' | 'ground_variation'>('ground');
+  const [importType, setImportType] = useState<'ground' | 'ocean' | 'object' | 'ground_variation' | 'dynamic_decal'>('ground');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +44,7 @@ export default function AssetManager({
   const [isGroundVariationExpanded, setIsGroundVariationExpanded] = useState(true);
   const [isOceanExpanded, setIsOceanExpanded] = useState(true);
   const [isObjectsExpanded, setIsObjectsExpanded] = useState(true);
+  const [isDecalsExpanded, setIsDecalsExpanded] = useState(true);
 
   const loadAndMeasureImage = (url: string): Promise<{ width: number, height: number, sizeBytes: number }> => {
     return new Promise((resolve) => {
@@ -88,7 +89,7 @@ export default function AssetManager({
     if (setReplaceAssetId) setReplaceAssetId(null);
   };
 
-  const openModal = (type: 'ground' | 'ocean' | 'object') => {
+  const openModal = (type: 'ground' | 'ocean' | 'object' | 'dynamic_decal') => {
     setImportType(type);
     setIsImportModalOpen(true);
     setError(null);
@@ -141,7 +142,7 @@ export default function AssetManager({
     }
   };
 
-  const handleImportObject = async (task: Task, node: any) => {
+  const handleImportObjectOrDecal = async (task: Task, node: any) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -169,6 +170,19 @@ export default function AssetManager({
           ...stats
         } : a));
         setActiveSelection({ type: 'object', id: replaceAssetId });
+      } else if (importType === 'dynamic_decal') {
+        const newId = Math.random().toString(36).substr(2, 9);
+        const newDecal = {
+          id: newId,
+          name: node.data.localPrompt || "Generated Decal",
+          imageUrl,
+          size: 1.0,
+          opacity: 1.0,
+          smoothing: 0,
+          baseTiles: []
+        };
+        setDecalAssets([...decalAssets, newDecal]);
+        setActiveSelection({ type: 'dynamic_decal', id: newId });
       } else {
         const newId = Math.random().toString(36).substr(2, 9);
         const stats = await loadAndMeasureImage(imageUrl);
@@ -263,7 +277,7 @@ export default function AssetManager({
                 <button 
                   onClick={() => setActiveSelection({ type: 'ground' })}
                   className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center gap-3 ${
-                    activeSelection.type === 'ground' ? 'border-emerald-500/60 bg-emerald-900/20' : 'border-transparent hover:border-emerald-500/30'
+                    (activeSelection.type === 'ground' || activeSelection.type === 'ground_variation' || activeSelection.type === 'dynamic_decal') ? 'border-emerald-500/60 bg-emerald-900/20' : 'border-transparent hover:border-emerald-500/30'
                   }`}
                 >
                   <div className="w-10 h-10 bg-black/50 rounded-sm flex items-center justify-center shrink-0 border border-emerald-500/20 overflow-hidden">
@@ -283,6 +297,94 @@ export default function AssetManager({
                 <Plus className="w-4 h-4" /> Import Ground
               </button>
             )
+          )}
+        </div>
+
+        {/* Dynamic Decals Section */}
+        <div>
+          <button 
+            onClick={() => setIsDecalsExpanded(!isDecalsExpanded)}
+            className="flex items-center gap-1 w-full text-left mb-2 px-1 hover:text-white"
+          >
+            <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isDecalsExpanded ? '' : '-rotate-90'}`} />
+            <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Dynamic Decals</h3>
+          </button>
+
+          {isDecalsExpanded && (
+            <div className="space-y-1">
+              {decalAssets.map((decal) => (
+                <button
+                  key={decal.id}
+                  onClick={() => setActiveSelection({ type: 'dynamic_decal', id: decal.id })}
+                  className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center justify-between group ${
+                    activeSelection.type === 'dynamic_decal' && activeSelection.id === decal.id
+                      ? 'border-emerald-500/60 bg-emerald-900/20'
+                      : 'border-transparent hover:border-emerald-500/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 bg-black/50 rounded-sm flex items-center justify-center shrink-0 border border-emerald-500/20 overflow-hidden">
+                      <img alt={decal.name} src={decal.imageUrl} className="w-8 h-8 object-contain" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-emerald-100 truncate">{decal.name}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDecalAssets(decalAssets.filter(d => d.id !== decal.id));
+                      if (activeSelection.type === 'dynamic_decal' && activeSelection.id === decal.id) {
+                        setActiveSelection({ type: 'map' });
+                      }
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:text-white hover:bg-red-500/50 rounded-sm transition-all"
+                  >
+                    <Upload className="w-3.5 h-3.5 hidden" />
+                    <span className="text-xs">🗑️</span>
+                  </button>
+                </button>
+              ))}
+
+              <button 
+                onClick={() => openModal('dynamic_decal')}
+                className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-emerald-500/50 rounded-sm p-3 text-center text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center gap-2 text-xs mt-2"
+              >
+                <Plus className="w-4 h-4" /> Import Decal
+              </button>
+
+              <div className="relative mt-2">
+                <input
+                  type="file" accept="image/*"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                      if (event.target?.result) {
+                        const newId = Math.random().toString(36).substr(2, 9);
+                        setDecalAssets([...decalAssets, {
+                          id: newId,
+                          name: file.name,
+                          imageUrl: event.target.result as string,
+                          size: 1.0,
+                          opacity: 1.0,
+                          smoothing: 0,
+                          baseTiles: []
+                        }]);
+                        setActiveSelection({ type: 'dynamic_decal', id: newId });
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button className="w-full bg-black/20 border border-dashed border-gray-600 hover:border-emerald-500/50 rounded-sm p-3 text-center text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center gap-2 text-xs">
+                  <Upload className="w-4 h-4" /> Upload Local Image
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
@@ -499,7 +601,7 @@ export default function AssetManager({
                               return (
                                 <button
                                   key={node.id}
-                                  onClick={() => handleImportObject(task, node)}
+                                  onClick={() => handleImportObjectOrDecal(task, node)}
                                   disabled={isLoading || !imageUrl}
                                   className={`aspect-square relative rounded-sm border transition-all flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${
                                     isAlreadyImported 

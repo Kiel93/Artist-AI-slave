@@ -1,0 +1,203 @@
+THAM GIA ZALO ĐỂ NHẬN THÔNG BÁO MỚI NHẤT
+Giới thiệu bạn bè để lấy link giới thiệu nhé!
+✅ Khi có người đăng ký/chi tiêu qua link của anh em, anh em sẽ nhận 10% từ người được giới thiệu.
+Tham gia nhóm Zalo để được tư vấn & nhận credit miễn phí:
+👉 https://zalo.me/g/levegx396
+Đã hiểu
+
+Bật thông báo để nhận tin mới nhanh hơn.
+
+Later
+Bật thông báo
+PlenX
+Image
+Video
+Voices
+Apps
+Workflow
+Khám phá
+Khóa Học
+Tài nguyên
+Bảng giá
+Login
+Developer API
+
+Tài liệu API và quản lý tích hợp AI Image & Video Generation.
+
+API Keys
+Usage
+Documentation
+API Documentation
+
+Tích hợp AI Image, Video & Text Generation vào ứng dụng của bạn thông qua REST API.
+
+Quick Start
+1
+Tạo API key từ tab API Keys
+2
+Gửi request với header X-API-Key
+3
+Poll /status để lấy kết quả
+Image & Video Generation (X-API-Key)
+POST
+/api/v1/developer/generate/image
+
+Tạo ảnh AI — Nano Banana PRO
+
+Chọn Model để xem tham số:
+
+Nano Banana PRO
+Nano Banana Full
+Nano Banana 2
+Kling O1 Image
+Image Gen 4
+Flux 2 Pro
+Seedream 5 Lite
+Seedream 4.5
+Grok Image
+GPT Image 2
+Kling 3.0 Omni Image
+
+Tạo ảnh chất lượng cao (Gemini)
+
+TÊN	LOẠI	BẮT BUỘC	MÔ TẢ
+prompt	string	BẮT BUỘC	Mô tả văn bản nội dung mong muốn.
+model	string	BẮT BUỘC	ID model đã chọn: nano-banana-pro
+resolution	string	Tùy chọn	Cho phép: '1k', '2k', '4k'. Mặc định: '1k'
+aspect_ratio	string	Tùy chọn	Cho phép: 'Auto', '1:1', '4:3', '3:4', '9:16', '16:9'
+references_urls	string[]	Tùy chọn	URLs ảnh tham khảo (tối đa 8)
+negative_prompt	string	Tùy chọn	Những gì không muốn xuất hiện trong ảnh
+server	string	Tùy chọn	Server slug: 'vip-01', 'business'. Ảnh hưởng routing + cost.
+Servers
+Xem giá
+vip-01
+DEFAULT
+business
+Ví dụ request cho Nano Banana PRO
+BASH
+Copy
+curl -X POST https://plenxai.com/api/v1/developer/generate/image \
+  -H "X-API-Key: pk_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "A cinematic shot of a sunset over mountains",
+    "model": "nano-banana-pro",
+    "resolution": "1k",
+    "aspect_ratio": "16:9",
+    "references_urls": ["https://example.com/style.jpg"]
+  }'
+Phản hồi 200 OK
+JSON
+Copy
+{
+  "success": true,
+  "task_id": "abc123-def456-...",
+  "status": "queued",
+  "message": "Image generation queued successfully."
+}
+POST
+/api/v1/developer/generate/video
+
+Tạo video AI — Veo 3 Fast
+
+POST
+/api/v1/developer/generate/motion-control
+
+Kling Motion Control — chuyển động từ video tham chiếu sang ảnh nhân vật (v2.6 & v3.0)
+
+POST
+/api/v1/developer/generate/video-omni
+
+Video Omni — Veo 3.1 Fast
+
+Status & Polling
+GET
+/api/v1/developer/status/{task_id}
+
+Poll trạng thái generation. Trả về result_url khi hoàn thành.
+
+Text Generation API (X-API-Key)
+POST
+/api/v1/developer/text-gen/generate
+
+Generate text bằng AI. Hỗ trợ multi-modal (text + images).
+
+GET
+/api/v1/developer/text-gen/models
+
+Liệt kê các model text generation khả dụng.
+
+Voice TTS API (X-API-Key)
+POST
+/api/v1/developer/generate/voice
+
+Tạo giọng nói AI từ text (Text-to-Speech).
+
+GET
+/api/v1/developer/voice/models
+
+Liệt kê các TTS models khả dụng.
+
+GET
+/api/v1/developer/voice/voices
+
+Liệt kê giọng nói có sẵn từ thư viện.
+
+Media Upload API (X-API-Key)
+POST
+/api/v1/developer/media-upload/presign
+
+Tạo presigned URL để upload trực tiếp lên Cloudflare R2.
+
+POST
+/api/v1/developer/media-upload/confirm
+
+Xác nhận upload & push image lên Cloudflare Images CDN.
+
+POST
+/api/v1/developer/media-upload/direct
+
+Upload server-side (base64) cho file nhỏ.
+
+DELETE
+/api/v1/developer/media-upload/{media_id}
+
+Xóa media đã upload (R2 + DB).
+
+Remove Background API (X-API-Key)
+POST
+/api/v1/developer/remove-background
+
+Xóa nền ảnh (đồng bộ). Trả về URL ảnh đã xóa nền ngay lập tức.
+
+POST
+/api/v1/developer/remove-background/batch
+
+Xóa nền nhiều ảnh cùng lúc (tối đa 10). Xử lý đồng thời, trả về tất cả kết quả.
+
+Error Handling
+Error Response Format
+
+Cấu trúc lỗi trả về khi request thất bại.
+
+PlenX
+
+Nền tảng sáng tạo nội dung AI toàn diện. Tạo ảnh, video, thiết kế nội thất và nhiều công cụ AI chuyên nghiệp.
+
+AI Features
+AI Image Generator
+AI Video Generator
+Interior Design
+Mega Studio
+Công cụ
+AI Product Creator
+Food Creator
+Skin Enhancer
+AI Upscale
+Liên hệ
+Zalo
+
+© 2026 PlenX. All rights reserved.
+
+Made with
+in Vietnam

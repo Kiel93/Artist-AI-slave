@@ -77,7 +77,7 @@ export interface DecalAsset {
   fileSizeBytes?: number;
 }
 
-export type SelectionState = { type: 'map' } | { type: 'ground' } | { type: 'ocean' } | { type: 'object', id: string, instanceId?: string } | { type: 'ground_variation', id?: string };
+export type SelectionState = { type: 'map' } | { type: 'ground' } | { type: 'ocean' } | { type: 'object', id: string, instanceId?: string } | { type: 'ground_variation', id?: string } | { type: 'dynamic_decal', id: string };
 
 export type InstanceOverride = { cellX: number, cellY: number, lx: number, ly: number, deleted?: boolean, layer?: number };
 
@@ -477,6 +477,7 @@ export default function MapGeneratorWorkspace({ taskId, isActive = true }: { tas
           setDecalAssets={setDecalAssets}
           decalOverrides={mapState.decalOverrides}
           activeSelection={activeSelection}
+          setActiveSelection={setActiveSelection}
           onRequestReplaceNode={(id) => setReplaceAssetId(id)}
           objectStats={objectStats}
           hasManualEdits={Object.keys(mapState.instanceOverrides).length > 0 || Object.keys(mapState.groundOverrides).length > 0}

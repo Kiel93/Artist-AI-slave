@@ -951,7 +951,7 @@ export default function ParameterUI({
   const [generatedFoamTiles, setGeneratedFoamTiles] = useState<Record<string, string>>({});
   const [expandedLevels, setExpandedLevels] = useState<Record<number, boolean>>({});
   const [openOceanSection, setOpenOceanSection] = useState<'taper' | 'foam' | 'tiles' | null>('taper');
-  const [openGroundSection, setOpenGroundSection] = useState<'tiles' | 'variations' | null>('tiles');
+  const [openGroundSection, setOpenGroundSection] = useState<'tiles' | 'tile-variations' | 'dynamic-decals' | null>('tiles');
   const [openTileVariation, setOpenTileVariation] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -959,7 +959,9 @@ export default function ParameterUI({
   const [exportGround, setExportGround] = useState(true);
   const [exportObjects, setExportObjects] = useState(true);
   const [exportGrid, setExportGrid] = useState(true);
-  const [exportBlueprints, setExportBlueprints] = useState(false);
+  const [exportBlueprints, setExportBlueprints] = useState(true);
+  const [exportIcon, setExportIcon] = useState(false);
+  const [iconResolution, setIconResolution] = useState(128);
 
   const handleBulkDownload = async (asset: MapAsset, prefix: string) => {
     setIsDownloading(true);
@@ -1164,6 +1166,8 @@ export default function ParameterUI({
         exportObjects,
         exportGrid,
         exportBlueprints,
+        exportIcon,
+        iconResolution,
         parameters
       });
       const objectUrl = URL.createObjectURL(blob);
@@ -1519,6 +1523,27 @@ export default function ParameterUI({
             <input type="checkbox" checked={exportBlueprints} onChange={e => setExportBlueprints(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
             <span className="text-xs text-gray-300">Include Initial Setup Kit</span>
           </label>
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={exportIcon} onChange={e => setExportIcon(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
+              <span className="text-xs text-gray-300">Icons</span>
+            </label>
+            {exportIcon && (
+              <div className="pl-6 flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">Resolution:</span>
+                <input 
+                  type="number" 
+                  value={iconResolution} 
+                  onChange={e => setIconResolution(parseInt(e.target.value) || 128)} 
+                  className="w-16 bg-black/40 border border-indigo-500/30 rounded-sm p-1 text-xs text-indigo-100 focus:outline-none focus:border-indigo-500/80"
+                  min="16"
+                  max="2048"
+                  step="1"
+                />
+                <span className="text-[10px] text-gray-400">px</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <button
@@ -1658,25 +1683,22 @@ export default function ParameterUI({
         {openGroundSection === 'tiles' && renderTilesetSlots(groundAsset, setGroundAsset as any, 'ground')}
       </div>
       <div className="border-b border-[var(--color-blender-border)] pb-2">
-        <button onClick={() => setOpenGroundSection(s => s === 'variations' ? null : 'variations')} className="w-full flex items-center justify-between py-2 text-amber-400 hover:text-amber-300">
-          <span className="text-sm font-semibold uppercase tracking-wider">Surface Appearance</span>
-          <ChevronDown className={`w-4 h-4 transition-transform ${openGroundSection === 'variations' ? 'rotate-180' : ''}`} />
+        <button onClick={() => setOpenGroundSection(s => s === 'tile-variations' ? null : 'tile-variations')} className="w-full flex items-center justify-between py-2 text-amber-400 hover:text-amber-300">
+          <span className="text-sm font-semibold uppercase tracking-wider">Tile Variation</span>
+          <ChevronDown className={`w-4 h-4 transition-transform ${openGroundSection === 'tile-variations' ? 'rotate-180' : ''}`} />
         </button>
-        {openGroundSection === 'variations' && renderGroundVariationInner()}
+        {openGroundSection === 'tile-variations' && renderTileVariationInner()}
       </div>
     </div>
   );
 
-  const renderGroundVariationInner = () => {
+  const renderTileVariationInner = () => {
     const centerSliceIdx = groundAsset?.slices?.findIndex(s => s.name === 'Ground_CenterFill');
     const slice = (centerSliceIdx !== undefined && centerSliceIdx !== -1) ? groundAsset!.slices[centerSliceIdx] : null;
 
     return (
       <div className="space-y-4 pt-2">
-
-        {/* Segment 1: Tile Variation */}
-        <div className="border-b border-[var(--color-blender-border)] pb-2">
-          <h4 className="text-xs font-bold text-amber-400 mb-2 uppercase tracking-wider">Tile Variation</h4>
+        <div className="pb-2">
           {!slice ? (
             <p className="text-xs text-gray-500">CenterFill tile not found.</p>
           ) : (
@@ -1854,120 +1876,79 @@ export default function ParameterUI({
             </div>
           )}
         </div>
+      </div>
+    );
+  };
 
-        {/* Segment 2: Dynamic Decals */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Dynamic Decals</h4>
-            <label className="text-[10px] bg-amber-600/20 text-amber-300 hover:bg-amber-600/40 px-2 py-1 rounded-sm cursor-pointer transition-colors flex items-center gap-1 border border-amber-500/30">
-              <Upload className="w-3 h-3" /> Import Decal
-              <input
-                type="file" accept="image/*" className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = async (event) => {
-                    if (event.target?.result && setDecalAssets) {
-                      const newId = Math.random().toString(36).substr(2, 9);
-                      setDecalAssets([...decalAssets, {
-                        id: newId,
-                        name: file.name,
-                        imageUrl: event.target.result as string,
-                        size: 1.0,
-                        opacity: 1.0,
-                        smoothing: 0,
-                        baseTiles: []
-                      }]);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                }}
-              />
-            </label>
+  const renderDecalSettings = (decalId: string) => {
+    const decalIdx = decalAssets?.findIndex(d => d.id === decalId);
+    if (decalIdx === undefined || decalIdx === -1 || !decalAssets) return <div className="text-gray-500">Decal not found</div>;
+    const decal = decalAssets[decalIdx];
+
+    return (
+      <div className="space-y-4">
+        <div className="flex gap-4 items-start bg-black/20 p-3 border border-[var(--color-blender-border)] rounded-sm">
+          <img src={decal.imageUrl} className="w-16 h-16 object-contain bg-black/50 border border-gray-700 rounded-sm" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-gray-200 truncate">{decal.name}</h3>
+            <p className="text-xs text-gray-500 mt-1">Adjust properties for this decal</p>
           </div>
-          <div className="space-y-2">
-            {!decalAssets || decalAssets.length === 0 ? (
-              <p className="text-xs text-gray-500">No decals imported.</p>
-            ) : (
-              decalAssets.map((decal, idx) => (
-                <div
-                  key={decal.id}
-                  className={`p-2 border rounded-sm relative group transition-colors cursor-pointer ${activeSelection.type === 'ground_variation' && activeSelection.id === decal.id ? 'bg-amber-900/20 border-amber-500/60' : 'bg-black/20 border-gray-800 hover:border-amber-500/30'}`}
-                  onClick={(e) => {
-                    // prevent selecting if interacting with slider or trash
-                    if ((e.target as HTMLElement).tagName.toLowerCase() === 'input' || (e.target as HTMLElement).closest('button')) return;
-                    if (setActiveSelection) setActiveSelection({ type: 'ground_variation', id: decal.id });
-                  }}
-                >
-                  <div className="flex gap-3 items-center mb-2">
-                    <img src={decal.imageUrl} className="w-10 h-10 object-contain bg-black/50 border border-gray-700 rounded-sm" />
-                    <div className="flex-1 min-w-0 text-xs font-medium text-gray-200 truncate">{decal.name}</div>
-                    <button
-                      onClick={() => setDecalAssets && setDecalAssets(decalAssets.filter(d => d.id !== decal.id))}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-300 transition-opacity"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <div className="space-y-2 pt-2 border-t border-gray-800">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 w-12">Size</span>
-                      <input
-                        type="range" min="0.1" max="3" step="0.1"
-                        value={decal.size}
-                        onChange={(e) => {
-                          if (setDecalAssets) {
-                            const newDecals = [...decalAssets];
-                            newDecals[idx].size = parseFloat(e.target.value);
-                            setDecalAssets(newDecals);
-                          }
-                        }}
-                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
-                      />
-                      <span className="text-[10px] text-gray-300 w-6 text-right">{decal.size.toFixed(1)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 w-12">Opacity</span>
-                      <input
-                        type="range" min="0" max="1" step="0.01"
-                        value={decal.opacity}
-                        onChange={(e) => {
-                          if (setDecalAssets) {
-                            const newDecals = [...decalAssets];
-                            newDecals[idx].opacity = parseFloat(e.target.value);
-                            setDecalAssets(newDecals);
-                          }
-                        }}
-                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
-                      />
-                      <span className="text-[10px] text-gray-300 w-6 text-right">{decal.opacity.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 w-12">Blur</span>
-                      <input
-                        type="range" min="0" max="20" step="1"
-                        value={decal.smoothing}
-                        onChange={(e) => {
-                          if (setDecalAssets) {
-                            const newDecals = [...decalAssets];
-                            newDecals[idx].smoothing = parseInt(e.target.value, 10);
-                            setDecalAssets(newDecals);
-                          }
-                        }}
-                        className="flex-1 accent-amber-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
-                      />
-                      <span className="text-[10px] text-gray-300 w-6 text-right">{decal.smoothing}</span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+        </div>
+
+        <div className="space-y-4 pt-2 border-t border-[var(--color-blender-border)]">
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-gray-400 w-16">Size</span>
+            <input
+              type="range" min="0.1" max="3" step="0.1"
+              value={decal.size}
+              onChange={(e) => {
+                if (setDecalAssets) {
+                  const newDecals = [...decalAssets];
+                  newDecals[decalIdx].size = parseFloat(e.target.value);
+                  setDecalAssets(newDecals);
+                }
+              }}
+              className="flex-1 accent-emerald-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
+            />
+            <span className="text-xs text-gray-300 w-8 text-right">{decal.size.toFixed(1)}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-gray-400 w-16">Opacity</span>
+            <input
+              type="range" min="0" max="1" step="0.01"
+              value={decal.opacity}
+              onChange={(e) => {
+                if (setDecalAssets) {
+                  const newDecals = [...decalAssets];
+                  newDecals[decalIdx].opacity = parseFloat(e.target.value);
+                  setDecalAssets(newDecals);
+                }
+              }}
+              className="flex-1 accent-emerald-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
+            />
+            <span className="text-xs text-gray-300 w-8 text-right">{decal.opacity.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-gray-400 w-16">Blur</span>
+            <input
+              type="range" min="0" max="20" step="1"
+              value={decal.smoothing}
+              onChange={(e) => {
+                if (setDecalAssets) {
+                  const newDecals = [...decalAssets];
+                  newDecals[decalIdx].smoothing = parseInt(e.target.value, 10);
+                  setDecalAssets(newDecals);
+                }
+              }}
+              className="flex-1 accent-emerald-500 h-1 bg-gray-800 rounded-sm appearance-none cursor-pointer"
+            />
+            <span className="text-xs text-gray-300 w-8 text-right">{decal.smoothing}</span>
           </div>
         </div>
       </div>
     );
   };
+
 
   const renderOceanSettings = () => (
     <div className="space-y-4">
@@ -2340,7 +2321,8 @@ export default function ParameterUI({
       <div className="p-4 border-b border-[var(--color-blender-border)]">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           {activeSelection.type === 'map' && <><Sliders className="w-5 h-5 text-blue-400" /> Map Settings</>}
-          {activeSelection.type === 'ground' && <><Settings className="w-5 h-5 text-emerald-400" /> Ground Settings</>}
+          {(activeSelection.type === 'ground' || activeSelection.type === 'ground_variation') && <><Settings className="w-5 h-5 text-emerald-400" /> Ground Settings</>}
+          {activeSelection.type === 'dynamic_decal' && <><ImageIcon className="w-5 h-5 text-emerald-400" /> Decal Settings</>}
           {activeSelection.type === 'ocean' && <><Settings className="w-5 h-5 text-blue-400" /> Ocean Settings</>}
           {activeSelection.type === 'object' && <><Box className="w-5 h-5 text-indigo-400" /> Object Inspect</>}
         </h2>
@@ -2348,7 +2330,8 @@ export default function ParameterUI({
 
       <div className="flex-1 overflow-y-auto p-5">
         {activeSelection.type === 'map' && renderMapSettings()}
-        {activeSelection.type === 'ground' && renderGroundSettings()}
+        {(activeSelection.type === 'ground' || activeSelection.type === 'ground_variation') && renderGroundSettings()}
+        {activeSelection.type === 'dynamic_decal' && renderDecalSettings(activeSelection.id)}
         {activeSelection.type === 'ocean' && renderOceanSettings()}
         {activeSelection.type === 'object' && renderObjectSettings(activeSelection.id)}
       </div>

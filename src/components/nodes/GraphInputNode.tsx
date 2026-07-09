@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { Handle, Position, useReactFlow, useEdges } from "reactflow";
 import { LogIn } from "lucide-react";
+import { getHandleType } from "@/lib/node-registry";
 
 export default function GraphInputNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
-  const { setNodes } = useReactFlow();
+  const { setNodes, getNode } = useReactFlow();
   const edges = useEdges();
 
   const inputType = data.inputType || "text";
@@ -12,12 +13,16 @@ export default function GraphInputNode({ id, data, selected }: { id: string; dat
     // Find the first outgoing edge from this node
     const outgoingEdge = edges.find(e => e.source === id);
     if (outgoingEdge && outgoingEdge.targetHandle) {
-      const autoType = (outgoingEdge.targetHandle.includes('image') || outgoingEdge.targetHandle.includes('img')) ? 'image' : 'text';
+      const targetNode = getNode(outgoingEdge.target);
+      if (!targetNode) return;
+
+      const exactType = getHandleType(targetNode.type || '', outgoingEdge.targetHandle);
+      const autoType = exactType || inputType; // maintain manual selection if completely unknown
       if (autoType !== inputType) {
         setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, inputType: autoType } } : n));
       }
     }
-  }, [edges, id, inputType, setNodes]);
+  }, [edges, id, inputType, setNodes, getNode]);
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, inputType: e.target.value } } : n));
@@ -27,7 +32,7 @@ export default function GraphInputNode({ id, data, selected }: { id: string; dat
     setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, pinLabel: e.target.value } } : n));
   };
 
-  const pinColor = inputType === "image" ? "!bg-[#22c55e]" : "!bg-[#3b82f6]";
+  const pinColor = inputType === "image" ? "!bg-[#22c55e]" : inputType === "value" ? "!bg-[#f43f5e]" : "!bg-[#3b82f6]";
 
   return (
     <div className={`w-48 bg-[#1a1525] rounded-lg shadow-xl relative ${
@@ -61,6 +66,7 @@ export default function GraphInputNode({ id, data, selected }: { id: string; dat
           >
             <option value="text">Text (Prompt/Style)</option>
             <option value="image">Image (Reference)</option>
+            <option value="value">Value (Number/Slider)</option>
           </select>
         </div>
       </div>
@@ -70,7 +76,7 @@ export default function GraphInputNode({ id, data, selected }: { id: string; dat
         type="source"
         position={Position.Right}
         id={inputType} // The source handle emits the selected type
-        className={`!min-w-0 !min-h-0 rounded-full !right-[-10px]`} style={{ width: '16px', height: '16px', backgroundColor: pinColor.includes('blue') ? '#3b82f6' : pinColor.includes('emerald') ? '#22c55e' : pinColor.includes('red') ? '#ef4444' : '#a855f7', borderColor: pinColor.includes('blue') ? '#1e3a8a' : pinColor.includes('emerald') ? '#14532d' : pinColor.includes('red') ? '#7f1d1d' : '#581c87', borderWidth: '2px' }}
+        className={`!min-w-0 !min-h-0 rounded-full !right-[-10px]`} style={{ width: '16px', height: '16px', backgroundColor: pinColor.includes('blue') ? '#3b82f6' : pinColor.includes('emerald') ? '#22c55e' : pinColor.includes('f43f5e') ? '#f43f5e' : '#a855f7', borderColor: pinColor.includes('blue') ? '#1e3a8a' : pinColor.includes('emerald') ? '#14532d' : pinColor.includes('f43f5e') ? '#9f1239' : '#581c87', borderWidth: '2px' }}
       />
     </div>
   );

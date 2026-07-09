@@ -257,7 +257,7 @@ export const executeShadowExtractorNode = async (nodeData: any, inputs: NodeExec
         
         const imageData = ctx.getImageData(0, 0, w, h);
         const data = imageData.data;
-        const intensity = nodeData.intensity !== undefined ? nodeData.intensity : 0;
+        const intensity = inputs.namedInputs?.['intensity']?.value ?? nodeData.intensity ?? 0;
         
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
@@ -389,8 +389,9 @@ export const executeBackgroundRemoverNode = async (nodeData: any, inputs: NodeEx
 export const executeTileCutterNode = async (nodeData: any, inputs: NodeExecutionInput, context: NodeExecutionContext): Promise<NodeExecutionResult> => {
   const imageUrl = inputs.namedInputs?.['image']?.image || inputs.imageInputs[0];
   if (!imageUrl) return { success: false, error: "No input image connected." };
-  const zoom = nodeData.zoom ?? 100;
-  const feather = nodeData.feather ?? 2;
+  const zoom = inputs.namedInputs?.['zoom']?.value ?? nodeData.zoom ?? 100;
+  const feather = inputs.namedInputs?.['feather']?.value ?? nodeData.feather ?? 2;
+  const opacity = inputs.namedInputs?.['opacity']?.value ?? nodeData.opacity ?? 100;
   const pan = nodeData.pan ?? { x: 0, y: 0 };
   
   return new Promise((resolve) => {
@@ -479,11 +480,17 @@ export const executeAssetGeneratorNode = async (nodeData: any, inputs: NodeExecu
           if (isDone && (res.result_url || (res as any).url || (res as any).image_url)) {
             clearInterval(interval);
             const finalUrl = res.result_url || (res as any).url || (res as any).image_url;
-            try {
-              const extractedAssetUrl = await performChromaKey(finalUrl, nodeData.threshold || 30);
-              resolve({ success: true, data: { image: extractedAssetUrl, generatedUrl: finalUrl } });
-            } catch (err: any) {
-              resolve({ success: false, error: err.message || "Chroma key failed." });
+            const applyChroma = inputs.namedInputs?.['image-2']?.image ? true : (nodeData.applyChromaKey || false);
+            if (applyChroma) {
+              const threshold = inputs.namedInputs?.['threshold']?.value ?? nodeData.threshold ?? 30;
+              try {
+                const extractedAssetUrl = await performChromaKey(finalUrl, threshold);
+                resolve({ success: true, data: { image: extractedAssetUrl, generatedUrl: finalUrl } });
+              } catch (err: any) {
+                resolve({ success: false, error: err.message || "Chroma key failed." });
+              }
+            } else {
+              resolve({ success: true, data: { image: finalUrl } });
             }
           } else if (res.status === 'failed' || (res.status as string) === 'error') {
             clearInterval(interval);
@@ -811,7 +818,8 @@ export const executeNode = async (
         success: true, 
         data: { 
            text: inputs.textInputs[0] || "",
-           image: inputs.imageInputs[0] || "" 
+           image: inputs.imageInputs[0] || "",
+           value: inputs.namedInputs?.['value']?.value !== undefined ? inputs.namedInputs['value'].value : undefined
         } 
       };
     case 'graphOutput':
@@ -819,8 +827,17 @@ export const executeNode = async (
         success: true, 
         data: { 
            text: inputs.textInputs.join(" ") || "",
-           image: inputs.imageInputs[0] || "" 
+           image: inputs.imageInputs[0] || "",
+           value: inputs.namedInputs?.['value']?.value !== undefined ? inputs.namedInputs['value'].value : undefined
         } 
+      };
+    case 'value':
+      const incomingValue = Object.values(inputs.namedInputs || {}).find(i => i.value !== undefined)?.value;
+      return {
+        success: true,
+        data: {
+          value: incomingValue !== undefined ? incomingValue : (nodeData.value !== undefined ? nodeData.value : 0)
+        }
       };
     default:
       return { success: false, error: `Execution for node type '${nodeType}' is not yet implemented headlessly.` };

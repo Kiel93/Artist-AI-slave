@@ -157,3 +157,12 @@ When a node's parameter slider (e.g., Zoom, Opacity) is driven by an incoming co
 2. **Minimalist UI**: Instead of displaying an obtrusive "driven by value node" graphic, box, or textfield, simply display the parameter's minimum and maximum limits directly inline as plain text (e.g., `(minVal/maxVal)`).
 3. **Styling**: The limits text must be styled cleanly on the same line as the parameter label (e.g., `Zoom (100/1000)`). Do NOT use italics. The text color should match the default node text color (do not use harsh semantic colors for this passive display).
 4. **Interpolation**: If the incoming `ValueNode` is set to "slider" mode (which emits 0 to 100), the receiving node MUST mathematically map/interpolate that 0-100 percentage into its own min/max limits (e.g., a 0 value becomes the node's minimum limit, 100 becomes the maximum). If the mode is "numeric", the exact value is used directly but clamped to the limits.
+
+---
+
+## 14. Central Node Schema Registry
+To eliminate brittle string-matching heuristics for handle data types, all node inputs and outputs MUST be registered in the Central Node Schema Registry (`src/lib/node-registry.ts`).
+
+1. **Mandatory Registration:** Whenever a new node is created or modified, its handle schema must be added or updated in the `NodeRegistry`.
+2. **Schema Structure:** The schema defines the node's `inputs` and `outputs` by mapping the specific handle `id` to its semantic data type (`text`, `image`, or `value`).
+3. **Usage:** Components (like `GraphInputNode` or the execution engine) must query this registry to confidently determine the data type of any given handle. Dynamic handles (like `image-plus` or dynamic list items) can still be resolved by the registry's built-in fallback logic, but all explicit static handles MUST be registered.

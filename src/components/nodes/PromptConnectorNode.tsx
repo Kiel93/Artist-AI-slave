@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Handle, Position, useReactFlow, useNodes, useEdges } from "reactflow";
-import { Link2, MessageSquare, PlusCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Link2, MessageSquare, PlusCircle, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 
 export default function PromptConnectorNode({ id, data, selected }: { id: string; data: any; selected?: boolean }) {
   const [collapsedStates, setCollapsedStates] = useState<Record<string, boolean>>({});
+  const [copied, setCopied] = useState(false);
   const { setNodes, setEdges } = useReactFlow();
   const nodes = useNodes();
   const allEdges = useEdges();
@@ -94,6 +95,14 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
       setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, text: combinedText } } : n));
     }
   }, [handles, editableTexts, nodes, allEdges, id, setNodes, data.text]);
+
+  const handleCopy = () => {
+    if (data.text) {
+      navigator.clipboard.writeText(data.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const COLORS = [
     'bg-blue-500/20 border-blue-500/50 text-blue-200',
@@ -192,6 +201,19 @@ export default function PromptConnectorNode({ id, data, selected }: { id: string
             <span className="text-[#121826] font-black text-[14px] leading-none mt-[-1px]">+</span>
           </Handle>
         </div>
+        
+        {/* Output Copy Button */}
+        {data.text && (
+          <div className="pt-2 mt-2 border-t border-blue-500/20">
+            <button
+              onClick={handleCopy}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded text-xs text-blue-300 transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? "Copied Output" : "Copy Output"}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Output Handle */}

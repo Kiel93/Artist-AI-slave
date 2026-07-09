@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Handle, Position, useReactFlow } from "reactflow";
 import { Play, Layers, RefreshCw, AlertCircle, Grid, X, Download, Copy } from "lucide-react";
 import { NodeExecutionInput, NodeExecutionContext } from "@/lib/node-executor";
@@ -11,6 +11,31 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
   
   const { getNodes, getEdges, setNodes } = useReactFlow();
 
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const runPipelineRef = useRef<(isLiveUpdate: boolean) => void>(() => {});
+  const executionCacheRef = useRef<Record<string, { hash: string, output: any }>>({});
+
+  useEffect(() => {
+    runPipelineRef.current = handleRunPipeline;
+  });
+
+  const handleSliderChange = (pinId: string, internalNodeId: string, newValue: number, targetHandleId?: string) => {
+    setNodes(nds => nds.map(n => n.id === id ? {
+      ...n,
+      data: {
+        ...n.data,
+        internalNodes: n.data.internalNodes.map((inNode: any) => 
+          inNode.id === internalNodeId ? { ...inNode, data: { ...inNode.data, [targetHandleId || 'value']: newValue } } : inNode
+        )
+      }
+    } : n));
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      runPipelineRef.current(true);
+    }, 300);
+  };
+
   const downloadImage = (url: string, filename: string) => {
     const a = document.createElement("a");
     a.href = url;
@@ -20,10 +45,12 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
     document.body.removeChild(a);
   };
 
-  const handleRunPipeline = async () => {
+  const handleRunPipeline = async (isLiveUpdate: boolean = false) => {
     setIsExecuting(true);
     setError(null);
     setStatus("Running...");
+
+    const PURE_NODES = ['shadowExtractor', 'tileCutter', 'isometricHexSlicer', 'styleInsert', 'imageEditor'];
 
     const internalNodes = data.internalNodes || [];
     const internalEdges = data.internalEdges || [];
@@ -42,17 +69,21 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
         // We directly seed the nodeOutputs for the GraphInputNode
         // GraphInputNode just passes data through, so its 'output' is the external data
         if (!nodeOutputs[e.targetHandle]) {
-          nodeOutputs[e.targetHandle] = { text: "", image: "" };
+          nodeOutputs[e.targetHandle] = { text: "", image: "", value: undefined };
         }
         
         const image = sourceNode.data.image || sourceNode.data.outputImage || "";
         const text = sourceNode.data.text|| "";
+        const value = sourceNode.data.value;
 
         if (image) {
            nodeOutputs[e.targetHandle].image = image;
         }
         if (text) {
            nodeOutputs[e.targetHandle].text = text;
+        }
+        if (value !== undefined) {
+           nodeOutputs[e.targetHandle].value = value;
         }
       }
     });
@@ -116,15 +147,36 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
         } else {
           const inputs: NodeExecutionInput = { textInputs, imageInputs, namedInputs };
           
-          const { executeNode } = await import("@/lib/node-executor");
-          const result = await executeNode(currentNode.type, currentNode.data, inputs, context);
+          const nodeHash = JSON.stringify({ data: currentNode.data, inputs });
+          const cached = executionCacheRef.current[currentNode.id];
 
-          if (!result.success) {
-            throw new Error(`Node ${currentNode.type} failed: ${result.error}`);
+          if (cached && cached.hash === nodeHash) {
+             nodeOutputs[currentNode.id] = cached.output;
+             executedCount++;
+          } else if (isLiveUpdate && !PURE_NODES.includes(currentNode.type)) {
+             // Abort expensive/API node execution during live slider updates!
+             // Use stale cached output if available so downstream pure nodes don't break.
+             if (cached) {
+                nodeOutputs[currentNode.id] = cached.output;
+             } else if (currentNode.data.image || currentNode.data.images || currentNode.data.text) {
+                nodeOutputs[currentNode.id] = currentNode.data;
+                executionCacheRef.current[currentNode.id] = { hash: nodeHash, output: currentNode.data };
+             } else {
+                throw new Error(`Please click 'Run Pipeline' first to generate ${currentNode.type} assets.`);
+             }
+             executedCount++;
+          } else {
+             const { executeNode } = await import("@/lib/node-executor");
+             const result = await executeNode(currentNode.type, currentNode.data, inputs, context);
+
+             if (!result.success) {
+               throw new Error(`Node ${currentNode.type} failed: ${result.error}`);
+             }
+
+             nodeOutputs[currentNode.id] = result.data;
+             executionCacheRef.current[currentNode.id] = { hash: nodeHash, output: result.data };
+             executedCount++;
           }
-
-          nodeOutputs[currentNode.id] = result.data;
-          executedCount++;
         }
 
         adj[currentNode.id].forEach(neighborId => {
@@ -157,12 +209,18 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
       
       setNodes(nds => nds.map(n => n.id === id ? {
         ...n,
-        data: { 
-           ...n.data, 
-           image: Object.values(finalImages)[0] || (lastOutput ? lastOutput.image : undefined),
-           images: Object.keys(finalImages).length > 0 ? finalImages : undefined,
-           text: Object.values(finalTexts)[0] || (lastTextOutput ? lastTextOutput.text : undefined),
-           texts: Object.keys(finalTexts).length > 0 ? finalTexts : undefined
+        data: {
+          ...n.data,
+          internalNodes: n.data.internalNodes.map((inNode: any) => {
+             if (nodeOutputs[inNode.id]) {
+                return { ...inNode, data: { ...inNode.data, ...nodeOutputs[inNode.id] } };
+             }
+             return inNode;
+          }),
+          image: Object.values(finalImages)[0] || (lastOutput ? lastOutput.image : undefined),
+          images: Object.keys(finalImages).length > 0 ? finalImages : undefined,
+          text: Object.values(finalTexts)[0] || (lastTextOutput ? lastTextOutput.text : undefined),
+          texts: Object.keys(finalTexts).length > 0 ? finalTexts : undefined,
         }
       } : n));
 
@@ -202,15 +260,64 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
                const pinId = typeof pin === 'string' ? pin : pin.id;
                const pinType = typeof pin === 'string' ? (pin.includes('image') ? 'image' : 'text') : pin.type;
                const pinLabel = typeof pin === 'string' ? pin : pin.label;
+
+               let sliderProps = null;
+               if (pinType === 'value') {
+                 const outgoingEdges = data.internalEdges?.filter((e: any) => e.source === pinId);
+                 if (outgoingEdges) {
+                    for (const edge of outgoingEdges) {
+                       const targetNode = data.internalNodes?.find((n: any) => n.id === edge.target);
+                       if (targetNode) {
+                          if (targetNode.type === 'value' && targetNode.data?.mode === 'slider') {
+                             sliderProps = { internalNodeId: targetNode.id, value: targetNode.data.value !== undefined ? targetNode.data.value : 0 };
+                             break;
+                          }
+                          if (targetNode.data?.limits && targetNode.data.limits[edge.targetHandle]) {
+                             const limits = targetNode.data.limits[edge.targetHandle];
+                             const currentVal = targetNode.data[edge.targetHandle] !== undefined ? targetNode.data[edge.targetHandle] : (limits.min || 0);
+                             sliderProps = { 
+                                internalNodeId: targetNode.id, 
+                                handleId: edge.targetHandle,
+                                value: currentVal,
+                                min: limits.min,
+                                max: limits.max,
+                                step: limits.step || 1
+                             };
+                             break;
+                          }
+                       }
+                    }
+                 }
+               }
+
                return (
-                 <div key={pinId} className="relative flex items-center h-6">
-                   <Handle
-                     type="target"
-                     id={pinId}
-                     position={Position.Left}
-                     className={`!min-w-0 !min-h-0 rounded-full !left-[-24px]`} style={{ width: '16px', height: '16px', backgroundColor: pinType === 'image' ? '#22c55e' : '#3b82f6', borderColor: pinType === 'image' ? '#14532d' : '#1e3a8a', borderWidth: '2px' }}
-                   />
-                   <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">{pinLabel}</span>
+                 <div key={pinId} className="relative flex flex-col justify-center min-h-[24px]">
+                   <div className="flex items-center h-6">
+                     <Handle
+                       type="target"
+                       id={pinId}
+                       position={Position.Left}
+                       className={`!min-w-0 !min-h-0 rounded-full !left-[-24px]`} style={{ width: '16px', height: '16px', backgroundColor: pinType === 'image' ? '#22c55e' : pinType === 'value' ? '#f43f5e' : '#3b82f6', borderColor: pinType === 'image' ? '#14532d' : pinType === 'value' ? '#9f1239' : '#1e3a8a', borderWidth: '2px' }}
+                     />
+                     <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-2">{pinLabel}</span>
+                   </div>
+                   {sliderProps && (
+                     <div className="pl-2 pr-2 pb-1 w-full mt-1">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[9px] text-rose-300/70 font-bold uppercase tracking-wider">Value: {Math.round(sliderProps.value)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={sliderProps.min ?? "0"}
+                          max={sliderProps.max ?? "100"}
+                          step={sliderProps.step ?? "1"}
+                          value={sliderProps.value}
+                          onChange={(e) => handleSliderChange(pinId, sliderProps.internalNodeId, parseFloat(e.target.value), sliderProps.handleId)}
+                          className="nodrag w-full h-1.5 bg-rose-900/50 rounded-lg appearance-none cursor-pointer border border-rose-500/30"
+                          style={{ accentColor: '#f43f5e' }}
+                        />
+                     </div>
+                   )}
                  </div>
                );
             })}
@@ -232,7 +339,7 @@ export default function CompoundNode({ id, data, selected }: { id: string; data:
         </button>
 
         <button 
-          onClick={handleRunPipeline}
+          onClick={() => handleRunPipeline(false)}
           disabled={isExecuting}
           className="nodrag w-full py-2.5 bg-purple-600 hover:bg-purple-500 border-b-4 border-purple-800 active:border-b-0 active:translate-y-1 text-white text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:translate-y-0 disabled:border-b-4 transition-all"
         >

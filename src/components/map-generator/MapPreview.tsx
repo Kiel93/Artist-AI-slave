@@ -150,7 +150,7 @@ export default function MapPreview({
   const [isMapPanning, setIsMapPanning] = useState(false);
   const [isPainting, setIsPainting] = useState(false);
   const paintStrokesRef = useRef<Record<string, number>>({});
-  const [brushPos, setBrushPos] = useState<{ gx: number, gy: number, cellX: number, cellY: number, isValid: boolean, level: number } | null>(null);
+  const [brushPos, setBrushPos] = useState<{ gx: number, gy: number, cellX: number, cellY: number, isValid: boolean, level: number, isoX?: number, isoY?: number } | null>(null);
   const [lastPanPos, setLastPanPos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -182,7 +182,7 @@ export default function MapPreview({
   };
 
   // Keep track of render bounds for picking math
-  const transformRef = useRef({ offsetX: 0, offsetY: 0, finalScale: 1 });
+  const transformRef = useRef({ offsetX: 0, offsetY: 0, finalScale: 1, autoScale: 1 });
   // Keep track of rendered objects for hit testing
   const renderedObjectsRef = useRef<{ id: string, instanceId: string, isoX: number, isoY: number, objW: number, objH: number }[]>([]);
   // Keep track of occupancy for grid rendering
@@ -807,7 +807,7 @@ export default function MapPreview({
     const offsetX = (clientWidth / 2) - ((minX + maxX) / 2) * finalScale + panOffset.x;
     const offsetY = (clientHeight / 2) - ((minY + maxY) / 2) * finalScale - (tileHalfHeight * finalScale) + panOffset.y;
 
-    transformRef.current = { offsetX, offsetY, finalScale };
+    transformRef.current = { offsetX, offsetY, finalScale, autoScale };
     renderedObjectsRef.current = [];
 
     ctx.save();
@@ -1217,14 +1217,22 @@ export default function MapPreview({
         const decalImg = images[`decal_${decalAsset.id}`];
         if (!decalImg) return;
 
-        const cellX = decalInstance.cellX;
-        const cellY = decalInstance.cellY;
+        let slotIsoX = 0;
+        let slotIsoY = 0;
 
-        const c_isoX = (cellX - cellY) * tileHalfWidth;
-        const c_isoY = -(cellX + cellY) * tileHalfHeight;
+        if (decalInstance.isDynamic) {
+          slotIsoX = decalInstance.worldX;
+          slotIsoY = decalInstance.worldY;
+        } else {
+          const cellX = decalInstance.cellX;
+          const cellY = decalInstance.cellY;
 
-        const slotIsoX = c_isoX + (decalInstance.lx - decalInstance.ly) * (140 / 3);
-        const slotIsoY = c_isoY - (decalInstance.lx + decalInstance.ly) * (70 / 3);
+          const c_isoX = (cellX - cellY) * tileHalfWidth;
+          const c_isoY = -(cellX + cellY) * tileHalfHeight;
+
+          slotIsoX = c_isoX + (decalInstance.lx - decalInstance.ly) * (140 / 3);
+          slotIsoY = c_isoY - (decalInstance.lx + decalInstance.ly) * (70 / 3);
+        }
 
         ctx.save();
         ctx.globalAlpha = decalAsset.opacity || 1;
@@ -1291,7 +1299,7 @@ export default function MapPreview({
     }
 
     // Brush Preview
-    if (activeTool === 'paint' && brushPos && (activeSelection?.type === 'object' || activeSelection?.type === 'ground' || activeSelection?.type === 'ocean' || activeSelection?.type === 'ground_variation')) {
+    if (activeTool === 'paint' && brushPos && (activeSelection?.type === 'object' || activeSelection?.type === 'ground' || activeSelection?.type === 'ocean' || activeSelection?.type === 'ground_variation' || activeSelection?.type === 'dynamic_decal')) {
       ctx.save();
       ctx.globalAlpha = 0.6;
       const tintColor = brushPos.isValid ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
@@ -1330,7 +1338,7 @@ export default function MapPreview({
             }
           }
         }
-      } else if (activeSelection?.type === 'object' || activeSelection?.type === 'ground_variation') {
+      } else if (activeSelection?.type === 'object' || activeSelection?.type === 'ground_variation' || activeSelection?.type === 'dynamic_decal') {
         const id = activeSelection.id || '';
         const assetInfo = activeSelection.type === 'object'
           ? objectAssets?.find(a => a.id === id)
@@ -1340,8 +1348,9 @@ export default function MapPreview({
           const img = images[activeSelection.type === 'object' ? id : `decal_${id}`];
           if (img) {
             const scale = (activeSelection.type === 'object' ? (assetInfo.scale || 1) : (assetInfo.size || 1));
-            const slotIsoX = (brushPos.gx - brushPos.gy) * dx;
-            const slotIsoY = -(brushPos.gx + brushPos.gy) * dy - brushYOffset;
+            const isDynamic = activeSelection.type === 'dynamic_decal';
+            const slotIsoX = isDynamic && brushPos.isoX !== undefined ? brushPos.isoX : (brushPos.gx - brushPos.gy) * dx;
+            const slotIsoY = isDynamic && brushPos.isoY !== undefined ? brushPos.isoY : -(brushPos.gx + brushPos.gy) * dy - brushYOffset;
 
             ctx.fillStyle = tintColor;
             ctx.beginPath();
@@ -1439,11 +1448,11 @@ export default function MapPreview({
       const gx = Math.round((isoX / dxGrid - isoY / dyGrid) / 2);
       const gy = Math.round(-(isoX / dxGrid + isoY / dyGrid) / 2);
 
-      applyPaintErase(gx, gy, activeTool);
+      applyPaintErase(gx, gy, activeTool, isoX, isoY);
     }
   };
 
-  const applyPaintErase = (gx: number, gy: number, tool: 'paint' | 'erase') => {
+  const applyPaintErase = (gx: number, gy: number, tool: 'paint' | 'erase', isoX?: number, isoY?: number) => {
     if (tool === 'paint') {
       if (activeSelection?.type === 'ground') {
         const cellX = Math.floor((gx + 1) / 3);
@@ -1543,6 +1552,24 @@ export default function MapPreview({
             }));
           }
         }
+      } else if (activeSelection?.type === 'dynamic_decal' && activeSelection.id && isoX !== undefined && isoY !== undefined) {
+        const strokeKey = `dyn_decal_${Math.round(isoX / 20)}_${Math.round(isoY / 20)}`;
+        if (!paintStrokesRef.current[strokeKey]) {
+          paintStrokesRef.current[strokeKey] = 1;
+          const newInstanceId = `dyn_decal_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+          if (setDecalOverrides) {
+            setDecalOverrides(prev => ({
+              ...prev,
+              [newInstanceId]: {
+                isDynamic: true,
+                worldX: isoX,
+                worldY: isoY,
+                layer: 1,
+                assetId: activeSelection.id
+              } as any
+            }));
+          }
+        }
       }
     } else if (tool === 'erase') {
       if (activeSelection?.type === 'ground') {
@@ -1580,6 +1607,23 @@ export default function MapPreview({
             if (dec.cellX === cellX && dec.cellY === cellY && dec.lx === lx && dec.ly === ly && dec.assetId === activeSelection.id && !dec.deleted) {
               newOverrides[id] = { ...dec, deleted: true } as any;
               erased = true;
+            }
+          }
+          if (erased) setDecalOverrides(newOverrides);
+        }
+      } else if (activeSelection?.type === 'dynamic_decal' && isoX !== undefined && isoY !== undefined) {
+        if (setDecalOverrides && decalOverrides) {
+          const newOverrides = { ...decalOverrides };
+          let erased = false;
+          for (const [id, dec] of Object.entries(newOverrides)) {
+            if ((dec as any).isDynamic && !dec.deleted) {
+              const dx = (dec as any).worldX - isoX;
+              const dy = (dec as any).worldY - isoY;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < 30) {
+                newOverrides[id] = { ...dec, deleted: true } as any;
+                erased = true;
+              }
             }
           }
           if (erased) setDecalOverrides(newOverrides);
@@ -1627,12 +1671,12 @@ export default function MapPreview({
     }
     const isValid = true;
 
-    setBrushPos({ gx, gy, cellX, cellY, isValid, level: maxLevel });
+    setBrushPos({ gx, gy, cellX, cellY, isValid, level: maxLevel, isoX, isoY });
 
     if (draggedInstance) {
       setDragSlot({ cellX, cellY, lx, ly, layer: maxLevel === 0 ? 1 : maxLevel });
     } else if (isPainting && activeTool === 'erase') {
-      applyPaintErase(gx, gy, activeTool);
+      applyPaintErase(gx, gy, activeTool, isoX, isoY);
 
       // Hit test for rapid object erasing
       let picked = null;
@@ -1657,7 +1701,7 @@ export default function MapPreview({
         }));
       }
     } else if (isPainting && activeTool !== 'select') {
-      applyPaintErase(gx, gy, activeTool as 'paint' | 'erase');
+      applyPaintErase(gx, gy, activeTool as 'paint' | 'erase', isoX, isoY);
     }
   };
 
@@ -1743,8 +1787,15 @@ export default function MapPreview({
             onPointerUp={handlePointerUp}
             onWheel={(e) => {
               setZoomMultiplier(prev => {
-                const delta = e.deltaY < 0 ? 0.1 : -0.1;
-                return Math.max(0.1, Math.min(prev + delta, 5));
+                const autoScale = transformRef.current.autoScale || 1;
+                const minZoom = 0.5; // Dynamic zoom out (stops when map fills 50% of screen)
+                const maxFinalScale = 3.0; // Constant zoom in max
+                const maxZoom = Math.max(minZoom, maxFinalScale / autoScale);
+                
+                // Exponential zoom for smoother zooming at extremes
+                const zoomSpeed = prev * 0.15;
+                const delta = e.deltaY < 0 ? zoomSpeed : -zoomSpeed;
+                return Math.max(minZoom, Math.min(prev + delta, maxZoom));
               });
             }}
           />

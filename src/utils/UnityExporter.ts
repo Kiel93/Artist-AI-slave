@@ -36,6 +36,51 @@ const bakeTransformToDataUrl = async (sourceUrl: string, scale: number): Promise
   });
 };
 
+const bakeIconToDataUrl = async (sourceUrl: string, targetSize: number): Promise<string> => {
+  if (!sourceUrl || targetSize <= 0) return sourceUrl;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const W = img.width;
+        const H = img.height;
+        if (W <= 0 || H <= 0) {
+          resolve(sourceUrl);
+          return;
+        }
+
+        const scale = Math.min(targetSize / W, targetSize / H);
+        const scaledW = W * scale;
+        const scaledH = H * scale;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        const ctx = canvas.getContext("2d")!;
+
+        // By default, the canvas is transparent, which matches the user's requirement.
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        // Center the image in the targetSize x targetSize canvas
+        const offsetX = (targetSize - scaledW) / 2;
+        const offsetY = (targetSize - scaledH) / 2;
+        
+        ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
+
+        resolve(canvas.toDataURL("image/png"));
+      } catch (e) {
+        console.error("Failed to bake icon", e);
+        resolve(sourceUrl);
+      }
+    };
+    img.onerror = () => resolve(sourceUrl);
+    img.src = sourceUrl;
+  });
+};
+
 export interface UnityExportParams {
   mapDataRef?: React.MutableRefObject<any>;
   oceanAsset: any;
@@ -49,6 +94,8 @@ export interface UnityExportParams {
   exportObjects: boolean;
   exportGrid: boolean;
   exportBlueprints: boolean;
+  exportIcon: boolean;
+  iconResolution: number;
   parameters: any;
 }
 
@@ -56,7 +103,8 @@ export async function exportToUnity(params: UnityExportParams): Promise<Blob> {
   const {
     mapDataRef, oceanAsset, groundAsset, objectAssets, decalOverrides,
     generatedOceanTiles, generatedFoamTiles,
-    exportOcean, exportGround, exportObjects, exportGrid, exportBlueprints, parameters
+    exportOcean, exportGround, exportObjects, exportGrid, exportBlueprints,
+    exportIcon, iconResolution, parameters
   } = params;
 
   try {
@@ -283,28 +331,11 @@ export async function exportToUnity(params: UnityExportParams): Promise<Blob> {
         }
       }
 
-      const objectInstances = mapDataRef?.current?.objectInstances;
-      if (exportObjects && objectInstances) {
-        for (const obj of objectInstances) {
-          const objAsset = objectAssets?.find(a => a.id === obj.id);
-          const prefabName = objAsset?.name || objAsset?.nodePrompt || obj.id;
-          const cleanPrefabName = prefabName.replace(/\s+/g, '_');
-
-          const unityX = obj.cellX * 3 + (obj.lx || 0);
-          const unityY = obj.cellY * 3 + (obj.ly || 0);
-
-          const itemConfig = {
-            id: cleanPrefabName,
-            flip: false,
-            position: { x: unityX, y: unityY },
-            lx: obj.lx || 0,
-            ly: obj.ly || 0,
-            layer: (obj as any).layer || 1
-          };
-
-          mapConfig.objects.push(itemConfig);
-
-          if (objAsset) {
+      if (exportObjects || exportIcon) {
+        if (objectAssets) {
+          for (const objAsset of objectAssets) {
+            const cleanPrefabName = objAsset.id;
+            
             if (objAsset.imageUrl) {
               objectSpriteUrls.set(cleanPrefabName, { url: objAsset.imageUrl, scale: objAsset.scale || 1 });
             }
@@ -315,6 +346,29 @@ export async function exportToUnity(params: UnityExportParams): Promise<Blob> {
                 baseTiles: (objAsset.baseTiles || [{ lx: 0, ly: 0 }]).map((t: any) => ({ lx: t.lx, ly: t.ly }))
               });
             }
+          }
+        }
+      }
+
+      if (exportObjects) {
+        const objectInstances = mapDataRef?.current?.objectInstances;
+        if (objectInstances) {
+          for (const obj of objectInstances) {
+            const cleanPrefabName = obj.id;
+
+            const unityX = obj.cellX * 3 + (obj.lx || 0);
+            const unityY = obj.cellY * 3 + (obj.ly || 0);
+
+            const itemConfig = {
+              id: cleanPrefabName,
+              flip: false,
+              position: { x: unityX, y: unityY },
+              lx: obj.lx || 0,
+              ly: obj.ly || 0,
+              layer: (obj as any).layer || 1
+            };
+
+            mapConfig.objects.push(itemConfig);
           }
         }
       }
@@ -1499,6 +1553,18 @@ public class WebGridRow
             }
           } else {
             promises.push(addDataUrlToZip(id, data.url, 'Textures/Objects'));
+          }
+        }
+      }
+
+      if (exportIcon) {
+        for (const [id, data] of Array.from(objectSpriteUrls.entries())) {
+          try {
+            const iconUrl = await bakeIconToDataUrl(data.url, iconResolution || 128);
+            promises.push(addDataUrlToZip(id, iconUrl, 'Textures/Icons'));
+          } catch (e) {
+            console.error(`Failed to export icon for ${id}`, e);
+            promises.push(addDataUrlToZip(id, data.url, 'Textures/Icons'));
           }
         }
       }
