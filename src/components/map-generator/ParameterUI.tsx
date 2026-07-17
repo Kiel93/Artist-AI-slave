@@ -484,6 +484,11 @@ function AssetFootprintEditor({ asset, onChange, onOffsetChange, groundAsset }: 
 
   const limit = Math.max(3, Math.ceil(8 / zoom));
   const baseTiles = asset.baseTiles || [{ lx: 0, ly: 0 }];
+  const baseTilesRef = useRef(baseTiles);
+  useEffect(() => {
+    baseTilesRef.current = baseTiles;
+  }, [baseTiles]);
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -501,6 +506,10 @@ function AssetFootprintEditor({ asset, onChange, onOffsetChange, groundAsset }: 
   const gridOffset = asset.gridOffset || { x: 0, y: 0 };
   const currentOffset = dragMode === 'grid' ? { x: gridOffset.x + tempOffset.x, y: gridOffset.y + tempOffset.y } : gridOffset;
 
+  const isCurrentlySelected = (lx: number, ly: number) => {
+    return baseTilesRef.current.some(t => t.lx === lx && t.ly === ly);
+  };
+
   const handlePolygonPointerDown = (lx: number, ly: number, e: React.PointerEvent) => {
     e.stopPropagation(); // Prevent background click
     if (e.button === 1) {
@@ -514,12 +523,34 @@ function AssetFootprintEditor({ asset, onChange, onOffsetChange, groundAsset }: 
       setDragStart({ x: e.clientX, y: e.clientY });
       e.currentTarget.setPointerCapture(e.pointerId);
     } else if (activeTool === 'paint') {
-      if (!isSelected(lx, ly)) {
-        onChange([...baseTiles, { lx, ly }]);
+      if (!isCurrentlySelected(lx, ly)) {
+        const newTiles = [...baseTilesRef.current, { lx, ly }];
+        baseTilesRef.current = newTiles;
+        onChange(newTiles);
       }
     } else if (activeTool === 'erase') {
-      const newTiles = baseTiles.filter(t => t.lx !== lx || t.ly !== ly);
-      onChange(newTiles.length > 0 ? newTiles : [{ lx: 0, ly: 0 }]);
+      const newTiles = baseTilesRef.current.filter(t => t.lx !== lx || t.ly !== ly);
+      const finalTiles = newTiles.length > 0 ? newTiles : [{ lx: 0, ly: 0 }];
+      baseTilesRef.current = finalTiles;
+      onChange(finalTiles);
+    }
+  };
+
+  const handlePolygonPointerEnter = (lx: number, ly: number, e: React.PointerEvent) => {
+    if (e.buttons !== 1) return; // Only if primary mouse button is held down
+    if (activeTool === 'paint') {
+      if (!isCurrentlySelected(lx, ly)) {
+        const newTiles = [...baseTilesRef.current, { lx, ly }];
+        baseTilesRef.current = newTiles;
+        onChange(newTiles);
+      }
+    } else if (activeTool === 'erase') {
+      if (isCurrentlySelected(lx, ly)) {
+        const newTiles = baseTilesRef.current.filter(t => t.lx !== lx || t.ly !== ly);
+        const finalTiles = newTiles.length > 0 ? newTiles : [{ lx: 0, ly: 0 }];
+        baseTilesRef.current = finalTiles;
+        onChange(finalTiles);
+      }
     }
   };
 
@@ -599,13 +630,33 @@ function AssetFootprintEditor({ asset, onChange, onOffsetChange, groundAsset }: 
           key={`${lx}-${ly}`}
           points={pts}
           fill={isSelected(lx, ly) ? "rgba(34, 197, 94, 0.5)" : "transparent"}
-          stroke="rgba(255, 255, 255, 0.4)"
-          strokeWidth="1"
           className={`cursor-pointer transition-colors ${activeTool === 'paint' ? 'hover:fill-green-500/70' : activeTool === 'erase' ? 'hover:fill-red-500/70' : ''}`}
           onPointerDown={(e) => handlePolygonPointerDown(lx, ly, e)}
+          onPointerEnter={(e) => handlePolygonPointerEnter(lx, ly, e)}
         />
       );
     }
+  }
+
+  const dynamicGridOpacity = Math.min(1.0, Math.max(0.7, 1.0 - (zoom - 0.5) * 0.12)).toFixed(2);
+  const gridLines = [];
+  for (let ly = -limit - 1; ly <= limit; ly++) {
+    const x1 = originX - limit * dx - ly * dx - dx;
+    const y1 = originY + limit * dy - ly * dy;
+    const x2 = originX + limit * dx - ly * dx;
+    const y2 = originY - limit * dy - ly * dy - dy;
+    gridLines.push(
+      <line key={`h-${ly}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={`rgba(255, 255, 255, ${dynamicGridOpacity})`} strokeWidth="1" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+    );
+  }
+  for (let lx = -limit; lx <= limit + 1; lx++) {
+    const x1 = originX + lx * dx + limit * dx;
+    const y1 = originY - lx * dy + limit * dy + dy;
+    const x2 = originX + lx * dx - limit * dx - dx;
+    const y2 = originY - lx * dy - limit * dy;
+    gridLines.push(
+      <line key={`v-${lx}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={`rgba(255, 255, 255, ${dynamicGridOpacity})`} strokeWidth="1" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+    );
   }
 
   return (
@@ -655,6 +706,7 @@ function AssetFootprintEditor({ asset, onChange, onOffsetChange, groundAsset }: 
             onPointerDown={handleBgPointerDown}
           >
             {gridCells}
+            {gridLines}
           </svg>
 
           {/* Preview Image */}
@@ -765,8 +817,8 @@ function ObjectSettingsPanel({ objId, objectAssets, updateObjectAsset, removeObj
               const task = await getTask(asset.taskId);
               if (!task || !task.nodes) return;
               const node = task.nodes.find(n => n.id === asset.nodeId);
-              if (node && (node.data.resultUrl || node.data.imageUrl)) {
-                updateObjectAsset(asset.id, { imageUrl: node.data.resultUrl || node.data.imageUrl });
+              if (node && (node.data.resultUrl || node.data.imageUrl || node.data.image)) {
+                updateObjectAsset(asset.id, { imageUrl: node.data.resultUrl || node.data.imageUrl || node.data.image });
               }
             }}
             className={`p-1 ${asset.taskId === 'local' ? 'text-gray-600 cursor-not-allowed' : 'text-blue-400 hover:text-blue-300'}`}
@@ -1887,15 +1939,90 @@ export default function ParameterUI({
 
     return (
       <div className="space-y-4">
-        <div className="flex gap-4 items-start bg-black/20 p-3 border border-[var(--color-blender-border)] rounded-sm">
-          <img src={decal.imageUrl} className="w-16 h-16 object-contain bg-black/50 border border-gray-700 rounded-sm" />
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold text-gray-200 truncate">{decal.name}</h3>
-            <p className="text-xs text-gray-500 mt-1">Adjust properties for this decal</p>
+        <div className="flex flex-col gap-1 py-1 border-b border-[var(--color-blender-border)] pb-3">
+          <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Decal Name</label>
+          <input
+            type="text"
+            value={decal.name || "Unnamed Decal"}
+            onChange={(e) => {
+              if (setDecalAssets && decalAssets) {
+                const newDecals = [...decalAssets];
+                newDecals[decalIdx].name = e.target.value;
+                setDecalAssets(newDecals);
+              }
+            }}
+            className="w-full bg-black/40 border border-indigo-500/30 rounded-sm p-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-500/80"
+            placeholder="Enter decal name..."
+          />
+        </div>
+
+        <div className="flex items-center justify-between border-b border-[var(--color-blender-border)] pb-2">
+          <h3 className="text-sm font-semibold text-indigo-300 uppercase tracking-wider">Decal Inspect</h3>
+          <div className="flex gap-1">
+            <button
+              onClick={async () => {
+                if (decal.taskId === 'local') return;
+                const task = await getTask(decal.taskId);
+                if (!task || !task.nodes) return;
+                const node = task.nodes.find(n => n.id === decal.nodeId);
+                if (node && (node.data.resultUrl || node.data.imageUrl || node.data.image)) {
+                  if (setDecalAssets && decalAssets) {
+                    const newDecals = [...decalAssets];
+                    newDecals[decalIdx].imageUrl = node.data.resultUrl || node.data.imageUrl || node.data.image;
+                    setDecalAssets(newDecals);
+                  }
+                }
+              }}
+              className={`p-1 ${decal.taskId === 'local' ? 'text-gray-600 cursor-not-allowed' : 'text-blue-400 hover:text-blue-300'}`}
+              title={decal.taskId === 'local' ? "Cannot sync local files" : "Sync with Node"}
+              disabled={decal.taskId === 'local'}
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => onRequestReplaceNode && onRequestReplaceNode(`decal_${decal.id}`)}
+              className="text-pink-400 hover:text-pink-300 p-1"
+              title="Replace from Node"
+            >
+              <ImageIcon className="w-4 h-4" />
+            </button>
+            <label className="text-yellow-400 hover:text-yellow-300 p-1 cursor-pointer" title="Replace with File">
+              <Upload className="w-4 h-4" />
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    if (event.target?.result && setDecalAssets && decalAssets) {
+                      const newDecals = [...decalAssets];
+                      newDecals[decalIdx].imageUrl = event.target.result as string;
+                      newDecals[decalIdx].taskId = 'local';
+                      setDecalAssets(newDecals);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </label>
+            <button 
+              onClick={() => {
+                if (setDecalAssets && decalAssets) {
+                   setDecalAssets(decalAssets.filter(d => d.id !== decal.id));
+                }
+              }} 
+              className="text-red-400 hover:text-red-300 p-1" 
+              title="Remove Decal"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        <div className="space-y-4 pt-2 border-t border-[var(--color-blender-border)]">
+        <div className="space-y-4 pt-2">
           <div className="flex items-center gap-4">
             <span className="text-xs text-gray-400 w-16">Size</span>
             <input

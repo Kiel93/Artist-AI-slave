@@ -38,7 +38,7 @@ interface LayerData {
   fill?: string;
   shapeType?: 'rect' | 'circle' | 'star' | 'path';
   points?: number[];
-  lines?: { points: number[] }[];
+  lines?: { points: number[], size?: number, opacity?: number, hardness?: number }[];
   pathAnchors?: AnchorPoint[];
   pathClosed?: boolean;
   stroke?: string;
@@ -57,17 +57,18 @@ interface LayerData {
     sepia?: boolean;
     invert?: boolean;
   };
-  mask?: {
-    type: 'marquee' | 'lasso' | 'path';
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    points?: number[];
-    pathAnchors?: AnchorPoint[];
-    pathClosed?: boolean;
-    inverted?: boolean;
+  rasterMask?: {
+    lines: { points: number[], size: number, mode: 'erase' | 'restore', opacity?: number, hardness?: number }[];
+    visible: boolean;
+    inverted: boolean;
   };
+  vectorMask?: {
+    pathAnchors: AnchorPoint[];
+    pathClosed: boolean;
+    visible: boolean;
+    inverted: boolean;
+  };
+  activeEditingTarget?: 'image' | 'rasterMask' | 'vectorMask';
 }
 
 const generatePathString = (anchors: AnchorPoint[], closed: boolean) => {
@@ -120,11 +121,7 @@ const drawPathAnchors = (ctx: any, anchors: AnchorPoint[], reverse: boolean) => 
 }
 
 const applyMaskClip = (ctx: any, mask: any) => {
-   if (!mask) return;
-   const isPath = mask.type === 'path' && mask.pathAnchors && mask.pathAnchors.length >= 2;
-   const isPoints = mask.points && mask.points.length >= 2;
-   
-   if (!isPath && !isPoints) return;
+   if (!mask || !mask.pathAnchors || mask.pathAnchors.length < 2) return;
    
    ctx.beginPath();
    
@@ -139,52 +136,16 @@ const applyMaskClip = (ctx: any, mask: any) => {
       
       // Determine winding of inner mask
       let sum = 0;
-      if (isPath) {
-         for (let i = 0; i < mask.pathAnchors.length; i++) {
-            const p1 = mask.pathAnchors[i];
-            const p2 = mask.pathAnchors[(i + 1) % mask.pathAnchors.length];
-            sum += (p2.x - p1.x) * (p2.y + p1.y);
-         }
-      } else {
-         const pts = mask.points;
-         for (let i = 0; i < pts.length; i += 2) {
-            const x1 = pts[i];
-            const y1 = pts[i+1];
-            const x2 = pts[(i + 2) % pts.length];
-            const y2 = pts[(i + 3) % pts.length];
-            sum += (x2 - x1) * (y2 + y1);
-         }
+      for (let i = 0; i < mask.pathAnchors.length; i++) {
+         const p1 = mask.pathAnchors[i];
+         const p2 = mask.pathAnchors[(i + 1) % mask.pathAnchors.length];
+         sum += (p2.x - p1.x) * (p2.y + p1.y);
       }
       
       const needsReverse = sum > 0;
-      
-      if (isPath) {
-         drawPathAnchors(ctx, mask.pathAnchors, needsReverse);
-      } else {
-         let finalPts = mask.points;
-         if (needsReverse) {
-            finalPts = [];
-            for (let i = mask.points.length - 2; i >= 0; i -= 2) {
-               finalPts.push(mask.points[i], mask.points[i+1]);
-            }
-         }
-         ctx.moveTo(finalPts[0], finalPts[1]);
-         for (let i = 2; i < finalPts.length; i += 2) {
-            ctx.lineTo(finalPts[i], finalPts[i+1]);
-         }
-         ctx.closePath();
-      }
+      drawPathAnchors(ctx, mask.pathAnchors, needsReverse);
    } else {
-      if (isPath) {
-         drawPathAnchors(ctx, mask.pathAnchors, false);
-      } else {
-         const pts = mask.points;
-         ctx.moveTo(pts[0], pts[1]);
-         for (let i = 2; i < pts.length; i += 2) {
-            ctx.lineTo(pts[i], pts[i+1]);
-         }
-         ctx.closePath();
-      }
+      drawPathAnchors(ctx, mask.pathAnchors, false);
    }
 };
 
@@ -197,7 +158,70 @@ interface WorkspaceProps {
 }
 
 type ToolMode = "select" | "pan" | "zoom" | "brush" | "marquee" | "lasso" | "pen";
+const RasterMaskRenderer = ({ mask, width, height }: any) => {
+  const [canvas] = useState(() => document.createElement('canvas'));
+  const [revision, setRevision] = useState(0);
 
+  useEffect(() => {
+    if (!width || !height) return;
+    
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Fill background
+    ctx.globalCompositeOperation = 'source-over';
+    if (mask.inverted) {
+      ctx.clearRect(0, 0, width, height);
+    } else {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    // Draw all strokes
+    if (mask.lines) {
+      mask.lines.forEach((l: any) => {
+        ctx.globalCompositeOperation = l.mode === 'erase' ? 'destination-out' : 'source-over';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = l.size || 20;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        if (l.opacity !== undefined) {
+          ctx.globalAlpha = l.opacity / 100;
+        } else {
+          ctx.globalAlpha = 1.0;
+        }
+
+        if (l.points && l.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(l.points[0], l.points[1]);
+          // For a single point click (2 coords), draw a tiny line to make it visible
+          if (l.points.length === 2) {
+            ctx.lineTo(l.points[0] + 0.1, l.points[1] + 0.1);
+          } else {
+            for (let i = 2; i < l.points.length; i += 2) {
+              ctx.lineTo(l.points[i], l.points[i + 1]);
+            }
+          }
+          ctx.stroke();
+        }
+      });
+    }
+
+    // Trigger a KonvaImage re-render
+    setRevision(r => r + 1);
+  }, [mask.lines, mask.inverted, width, height, canvas]);
+
+  return (
+    <KonvaImage 
+      image={canvas} 
+      globalCompositeOperation={mask.inverted ? "destination-out" : "destination-in"} 
+      listening={false}
+    />
+  );
+};
 const URLImage = ({ layer, url, isSelected, onSelect, onChange, width, height, isInteractive }: any) => {
   const [image] = useImage(url, 'anonymous');
   const shapeRef = useRef<any>(null);
@@ -218,7 +242,24 @@ const URLImage = ({ layer, url, isSelected, onSelect, onChange, width, height, i
          hitCanvasDrawAlphaThreshold: 10
        });
     }
-  }, [image, layer.filters, width, height, layer.scaleX, layer.scaleY, layer.rotation, layer.mask]);
+  }, [
+    image, 
+    layer.filters, 
+    width, 
+    height, 
+    layer.scaleX, 
+    layer.scaleY, 
+    layer.rotation, 
+    layer.mask, 
+    layer.rasterMask, 
+    layer.vectorMask,
+    layer.opacity,
+    layer.blendMode,
+    layer.shadowColor,
+    layer.shadowBlur,
+    layer.shadowOffsetX,
+    layer.shadowOffsetY
+  ]);
 
   if (!image) return null;
 
@@ -259,23 +300,28 @@ const URLImage = ({ layer, url, isSelected, onSelect, onChange, width, height, i
             rotation: node.rotation()
           });
         }}
-        clipFunc={layer.mask && layer.mask.points ? (ctx) => applyMaskClip(ctx, layer.mask) : undefined}
+        clipFunc={layer.vectorMask && layer.vectorMask.visible !== false && layer.vectorMask.pathAnchors && layer.vectorMask.pathAnchors.length >= 3 ? (ctx) => applyMaskClip(ctx, layer.vectorMask) : undefined}
       >
-        <KonvaImage
-          image={image}
-          filters={activeFilters.length > 0 ? activeFilters : undefined}
-          brightness={layer.filters?.brightness || 0}
-          contrast={layer.filters?.contrast || 0}
-          blurRadius={layer.filters?.blur || 0}
-          width={width}
-          height={height}
-          opacity={layer.opacity}
-          globalCompositeOperation={layer.blendMode || 'source-over'}
-          shadowColor={layer.shadowColor}
-          shadowBlur={layer.shadowBlur}
-          shadowOffsetX={layer.shadowOffsetX}
-          shadowOffsetY={layer.shadowOffsetY}
-        />
+        <Group>
+          <KonvaImage
+            image={image}
+            filters={activeFilters.length > 0 ? activeFilters : undefined}
+            brightness={layer.filters?.brightness || 0}
+            contrast={layer.filters?.contrast || 0}
+            blurRadius={layer.filters?.blur || 0}
+            width={width}
+            height={height}
+            opacity={layer.opacity}
+            globalCompositeOperation={layer.blendMode || 'source-over'}
+            shadowColor={layer.shadowColor}
+            shadowBlur={layer.shadowBlur}
+            shadowOffsetX={layer.shadowOffsetX}
+            shadowOffsetY={layer.shadowOffsetY}
+          />
+          {layer.rasterMask && layer.rasterMask.visible !== false && (
+            <RasterMaskRenderer mask={layer.rasterMask} width={width} height={height} />
+          )}
+        </Group>
       </Group>
       {isSelected && isInteractive && (
         <Transformer
@@ -332,7 +378,7 @@ const TextLayerRenderer = ({ layer, isSelected, onSelect, onChange, isInteractiv
             rotation: node.rotation()
           });
         }}
-        clipFunc={layer.mask && layer.mask.points ? (ctx) => applyMaskClip(ctx, layer.mask) : undefined}
+        clipFunc={layer.vectorMask && layer.vectorMask.visible !== false && layer.vectorMask.pathAnchors && layer.vectorMask.pathAnchors.length >= 3 ? (ctx) => applyMaskClip(ctx, layer.vectorMask) : undefined}
       >
         <KonvaText
           text={layer.text || "Double click to edit"}
@@ -395,13 +441,11 @@ const ShapeLayerRenderer = ({ layer, isSelected, onSelect, onChange, isInteracti
         ref={shapeRef}
         x={layer.x}
         y={layer.y}
-        rotation={layer.rotation}
         scaleX={layer.scaleX}
         scaleY={layer.scaleY}
+        rotation={layer.rotation}
         draggable={isSelected && isInteractive}
-        onDragEnd={(e: any) => {
-          onChange({ x: e.target.x(), y: e.target.y() });
-        }}
+        onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
         onTransformEnd={(e: any) => {
           const node = shapeRef.current;
           onChange({
@@ -409,7 +453,7 @@ const ShapeLayerRenderer = ({ layer, isSelected, onSelect, onChange, isInteracti
             scaleX: node.scaleX(), scaleY: node.scaleY(), rotation: node.rotation()
           });
         }}
-        clipFunc={layer.mask && layer.mask.points ? (ctx) => applyMaskClip(ctx, layer.mask) : undefined}
+        clipFunc={layer.vectorMask && layer.vectorMask.visible !== false && layer.vectorMask.pathAnchors && layer.vectorMask.pathAnchors.length >= 3 ? (ctx) => applyMaskClip(ctx, layer.vectorMask) : undefined}
       >
         {layer.shapeType === 'rect' && <Rect {...commonProps} width={layer.width || 100} height={layer.height || 100} offsetX={(layer.width || 100)/2} offsetY={(layer.height || 100)/2} />}
         {layer.shapeType === 'circle' && <KonvaCircle {...commonProps} radius={layer.radius || 50} />}
@@ -468,7 +512,7 @@ const BrushLayerRenderer = ({ layer, isSelected, onSelect, onChange, isInteracti
             scaleX: node.scaleX(), scaleY: node.scaleY(), rotation: node.rotation()
           });
         }}
-        clipFunc={layer.mask && layer.mask.points ? (ctx) => applyMaskClip(ctx, layer.mask) : undefined}
+        clipFunc={layer.vectorMask && layer.vectorMask.visible !== false && layer.vectorMask.pathAnchors && layer.vectorMask.pathAnchors.length >= 3 ? (ctx) => applyMaskClip(ctx, layer.vectorMask) : undefined}
       >
         {layer.points && layer.points.length > 0 && (
           <Line
@@ -489,7 +533,8 @@ const BrushLayerRenderer = ({ layer, isSelected, onSelect, onChange, isInteracti
             key={i}
             points={line.points}
             stroke={layer.stroke || '#ffffff'}
-            strokeWidth={layer.strokeWidth || 5}
+            strokeWidth={line.size || layer.strokeWidth || 5}
+            opacity={line.opacity !== undefined ? line.opacity / 100 : 1}
             tension={layer.tension !== undefined ? layer.tension : 0.5}
             lineCap="round"
             lineJoin="round"
@@ -516,7 +561,7 @@ const BrushLayerRenderer = ({ layer, isSelected, onSelect, onChange, isInteracti
   );
 };
 
-function InspectorPanel({ layer, image, onChange, globalSelection, onApplyMask, onRemoveMask }: { layer: LayerData, image: any, onChange: (updates: Partial<LayerData>) => void, globalSelection?: any, onApplyMask?: () => void, onRemoveMask?: () => void }) {
+function InspectorPanel({ layer, image, onChange }: { layer: LayerData, image: any, onChange: (updates: Partial<LayerData>) => void }) {
   const [openSections, setOpenSections] = useState({ transform: false, filter: false, effect: false, masking: true });
 
   const toggleSection = (section: keyof typeof openSections) => {
@@ -792,34 +837,75 @@ function InspectorPanel({ layer, image, onChange, globalSelection, onApplyMask, 
             {openSections.masking ? <ChevronUp className="w-3 h-3 text-gray-500" /> : <ChevronDown className="w-3 h-3 text-gray-500" />}
           </div>
           {openSections.masking && (
-            <div className="p-3 space-y-3">
-              {globalSelection && (globalSelection.width || globalSelection.points) ? (
-                 <button 
-                   onClick={onApplyMask}
-                   className="w-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 rounded py-2 text-xs font-bold transition-colors"
-                 >
-                   Apply Selection as Mask
-                 </button>
-              ) : (
-                 <p className="text-[10px] text-gray-500 text-center">Use Marquee or Lasso to create a selection, or use the Pen Tool directly on an image layer to draw a vector mask.</p>
-              )}
+            <div className="p-3 space-y-4">
+              {/* Raster Mask Controls */}
+              <div>
+                <h3 className="text-[10px] text-gray-400 font-bold uppercase mb-2">Raster Mask</h3>
+                {!layer.rasterMask ? (
+                   <button 
+                     onClick={() => onChange({ rasterMask: { lines: [], visible: true, inverted: false }, activeEditingTarget: 'rasterMask' })}
+                     className="w-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 rounded py-2 text-xs font-bold transition-colors"
+                   >
+                     + Add Raster Mask
+                   </button>
+                ) : (
+                   <div className="flex gap-2">
+                     <button 
+                       onClick={() => onChange({ rasterMask: undefined, activeEditingTarget: 'image' })}
+                       className="flex-1 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded py-1 text-[10px] font-bold transition-colors"
+                     >
+                       Remove
+                     </button>
+                     <button 
+                       onClick={() => onChange({ rasterMask: { ...layer.rasterMask!, inverted: !layer.rasterMask!.inverted } })}
+                       className={`flex-1 border rounded py-1 text-[10px] font-bold transition-colors ${layer.rasterMask?.inverted ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 text-gray-300 border-white/10'}`}
+                     >
+                       {layer.rasterMask?.inverted ? 'Inverted' : 'Invert'}
+                     </button>
+                     <button 
+                       onClick={() => onChange({ rasterMask: { ...layer.rasterMask!, visible: !layer.rasterMask!.visible } })}
+                       className="flex-1 bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 rounded py-1 text-[10px] font-bold transition-colors"
+                     >
+                       {layer.rasterMask?.visible ? 'Hide' : 'Show'}
+                     </button>
+                   </div>
+                )}
+              </div>
 
-              {layer.mask && (
-                 <div className="flex gap-2">
+              {/* Vector Mask Controls */}
+              <div>
+                <h3 className="text-[10px] text-gray-400 font-bold uppercase mb-2">Vector Mask</h3>
+                {!layer.vectorMask ? (
                    <button 
-                     onClick={onRemoveMask}
-                     className="flex-1 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded py-2 text-xs font-bold transition-colors"
+                     onClick={() => onChange({ vectorMask: { pathAnchors: [], pathClosed: false, visible: true, inverted: false }, activeEditingTarget: 'vectorMask' })}
+                     className="w-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 rounded py-2 text-xs font-bold transition-colors"
                    >
-                     Remove Mask
+                     + Add Vector Mask
                    </button>
-                   <button 
-                     onClick={() => onChange({ mask: { ...layer.mask!, inverted: !layer.mask!.inverted } })}
-                     className={`flex-1 border rounded py-2 text-xs font-bold transition-colors ${layer.mask?.inverted ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'}`}
-                   >
-                     {layer.mask?.inverted ? 'Uninvert Mask' : 'Invert Mask'}
-                   </button>
-                 </div>
-              )}
+                ) : (
+                   <div className="flex gap-2">
+                     <button 
+                       onClick={() => onChange({ vectorMask: undefined, activeEditingTarget: 'image' })}
+                       className="flex-1 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded py-1 text-[10px] font-bold transition-colors"
+                     >
+                       Remove
+                     </button>
+                     <button 
+                       onClick={() => onChange({ vectorMask: { ...layer.vectorMask!, inverted: !layer.vectorMask!.inverted } })}
+                       className={`flex-1 border rounded py-1 text-[10px] font-bold transition-colors ${layer.vectorMask?.inverted ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 text-gray-300 border-white/10'}`}
+                     >
+                       {layer.vectorMask?.inverted ? 'Inverted' : 'Invert'}
+                     </button>
+                     <button 
+                       onClick={() => onChange({ vectorMask: { ...layer.vectorMask!, visible: !layer.vectorMask!.visible } })}
+                       className="flex-1 bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 rounded py-1 text-[10px] font-bold transition-colors"
+                     >
+                       {layer.vectorMask?.visible ? 'Hide' : 'Show'}
+                     </button>
+                   </div>
+                )}
+              </div>
+
             </div>
           )}
         </div>
@@ -858,6 +944,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
   const [dropPosition, setDropPosition] = useState<'top' | 'bottom' | null>(null);
   
   const [toolMode, setToolMode] = useState<ToolMode>("select");
+  const [brushSettings, setBrushSettings] = useState({ size: 20, opacity: 100, hardness: 100 });
   const [viewport, setViewport] = useState({ panX: 0, panY: 0, zoom: 1 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const isDrawing = useRef(false);
@@ -868,6 +955,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
     isDrawing: boolean;
     activePointIndex: number;
     initialMousePos: { x: number, y: number };
+    layerId?: string;
   }>({ isDrawing: false, activePointIndex: -1, initialMousePos: { x: 0, y: 0 } });
 
   const [historyState, setHistoryState] = useState<{
@@ -1240,63 +1328,6 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
              const newLayers = layers.map(l => l.id === selectedLayerId ? { ...l, ...updates } : l);
              saveLayersToNode(newLayers);
            }}
-           globalSelection={globalSelection}
-           onApplyMask={() => {
-              if (!selectedLayerId || !globalSelection) return;
-              const activeLayer = layers.find(l => l.id === selectedLayerId);
-              if (!activeLayer) return;
-              
-              const img = layerImages[selectedLayerId];
-              const w = img ? img.width : (activeLayer.width || 0);
-              const h = img ? img.height : (activeLayer.height || 0);
-
-              const node = new Konva.Group({
-                 x: activeLayer.x || 0, 
-                 y: activeLayer.y || 0, 
-                 rotation: activeLayer.rotation || 0, 
-                 scaleX: activeLayer.scaleX !== undefined ? activeLayer.scaleX : 1, 
-                 scaleY: activeLayer.scaleY !== undefined ? activeLayer.scaleY : 1, 
-                 offsetX: activeLayer.type === 'image' || img ? w/2 : 0, 
-                 offsetY: activeLayer.type === 'image' || img ? h/2 : 0 
-              });
-              const transform = node.getTransform().copy().invert();
-              
-              let newMask: any = { type: 'lasso' };
-              
-              if (globalSelection.type === 'marquee' && globalSelection.x !== undefined && globalSelection.y !== undefined) {
-                 const p1 = transform.point({ x: globalSelection.x, y: globalSelection.y });
-                 const p2 = transform.point({ x: globalSelection.x + (globalSelection.width || 0), y: globalSelection.y });
-                 const p3 = transform.point({ x: globalSelection.x + (globalSelection.width || 0), y: globalSelection.y + (globalSelection.height || 0) });
-                 const p4 = transform.point({ x: globalSelection.x, y: globalSelection.y + (globalSelection.height || 0) });
-                 newMask.points = [p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y];
-              } else if (globalSelection.type === 'lasso' && globalSelection.points) {
-                 const pts = [];
-                 for(let i = 0; i < globalSelection.points.length; i+=2) {
-                    const p = transform.point({ x: globalSelection.points[i], y: globalSelection.points[i+1] });
-                    pts.push(p.x, p.y);
-                 }
-                 newMask.points = pts;
-              } else if (globalSelection.type === 'path' && globalSelection.pathAnchors) {
-                 const newAnchors = globalSelection.pathAnchors.map(a => {
-                    const p = transform.point({ x: a.x, y: a.y });
-                    const hi = a.handleIn ? transform.point(a.handleIn) : undefined;
-                    const ho = a.handleOut ? transform.point(a.handleOut) : undefined;
-                    return { ...a, x: p.x, y: p.y, handleIn: hi, handleOut: ho };
-                 });
-                 newMask.type = 'path';
-                 newMask.pathAnchors = newAnchors;
-              }
-              
-              const newLayers = layers.map(l => l.id === selectedLayerId ? { ...l, mask: newMask } : l);
-              saveLayersToNode(newLayers);
-              setGlobalSelection(null);
-              setToolMode("select");
-           }}
-           onRemoveMask={() => {
-              if (!selectedLayerId) return;
-              const newLayers = layers.map(l => l.id === selectedLayerId ? { ...l, mask: undefined } : l);
-              saveLayersToNode(newLayers);
-           }}
         />
 
         {/* Toolbar */}
@@ -1347,6 +1378,27 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
              setToolMode("select");
           }} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-emerald-500/20" title="Add Shape"><Square className="w-5 h-5" /></button>
           
+          <button onClick={() => {
+             const newId = `shape-layer-${Date.now()}`;
+             const nl: any = [...layers, {
+                id: newId,
+                name: `Path Shape`,
+                type: 'shape',
+                shapeType: 'path',
+                pathAnchors: [],
+                pathClosed: false,
+                fill: 'transparent',
+                stroke: '#10b981',
+                strokeWidth: 5,
+                x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1, zIndex: layers.length, visible: true
+             }];
+             setLayers(nl);
+             saveLayersToNode(nl);
+             setSelectedLayerId(newId);
+             setToolMode("pen");
+             penDrawState.current = { isDrawing: false, activePointIndex: -1, initialMousePos: { x: 0, y: 0 }, layerId: newId };
+          }} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-emerald-500/20" title="Add Path"><PenTool className="w-5 h-5" /></button>
+          
 
         </div>
         {/* Central Canvas */}
@@ -1384,12 +1436,14 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                   }
                   if (e.evt.button !== 0) return;
 
-                  if (e.target === e.target.getStage() && toolMode === "select") {
+                  if (e.target === e.target.getStage() && (toolMode === "select" || (toolMode === "pen" && (e.evt.ctrlKey || e.evt.metaKey)))) {
                      setSelectedLayerId(null);
                      return;
                   }
                   
                   if (toolMode === "pen") {
+                     if (e.evt.ctrlKey || e.evt.metaKey) return; // Allow onClick to handle shape selection
+                     
                      const stage = e.target.getStage();
                      if (!stage) return;
                      const pos = stage.getPointerPosition();
@@ -1398,34 +1452,31 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                      const relativeY = (pos.y - viewport.panY) / viewport.zoom - dimensions.height / 2;
                    
                      const activeLayer = layers.find(l => l.id === selectedLayerId);
-                     const isEditingMask = activeLayer?.type === 'image';
+                     const isEditingMask = activeLayer?.activeEditingTarget === 'vectorMask';
+                     
+                     const img = activeLayer ? layerImages[activeLayer.id] : undefined;
+                     const w = img ? img.width : (activeLayer?.width || 0);
+                     const h = img ? img.height : (activeLayer?.height || 0);
                      
                      let targetAnchors: AnchorPoint[] | undefined;
                      let targetClosed = false;
-                     let targetTransform = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, offsetX: 0, offsetY: 0 };
                      
-                     if (activeLayer) {
-                        const img = layerImages[activeLayer.id];
-                        const w = img ? img.width : (activeLayer.width || 0);
-                        const h = img ? img.height : (activeLayer.height || 0);
-                        targetTransform = {
-                           x: activeLayer.x || 0, y: activeLayer.y || 0,
-                           scaleX: activeLayer.scaleX !== undefined ? activeLayer.scaleX : 1,
-                           scaleY: activeLayer.scaleY !== undefined ? activeLayer.scaleY : 1,
-                           rotation: activeLayer.rotation || 0,
-                           offsetX: activeLayer.type === 'image' || img ? w/2 : 0,
-                           offsetY: activeLayer.type === 'image' || img ? h/2 : 0
-                        };
-                     }
+                     const node = new Konva.Group({
+                        x: activeLayer?.x || 0, y: activeLayer?.y || 0, 
+                        scaleX: activeLayer?.scaleX !== undefined ? activeLayer.scaleX : 1, 
+                        scaleY: activeLayer?.scaleY !== undefined ? activeLayer.scaleY : 1,
+                        rotation: activeLayer?.rotation || 0,
+                        offsetX: activeLayer?.type === 'image' || img ? w/2 : 0,
+                        offsetY: activeLayer?.type === 'image' || img ? h/2 : 0
+                     });
                      
                      // Convert click point to layer's local space
-                     const node = new Konva.Group(targetTransform);
                      const localPt = activeLayer ? node.getTransform().copy().invert().point({ x: relativeX, y: relativeY }) : { x: relativeX, y: relativeY };
                      const newPt: AnchorPoint = { x: localPt.x, y: localPt.y, type: 'sharp' };
 
-                     if (isEditingMask && activeLayer?.mask?.type === 'path') {
-                        targetAnchors = activeLayer.mask.pathAnchors;
-                        targetClosed = !!activeLayer.mask.pathClosed;
+                     if (isEditingMask && activeLayer?.vectorMask) {
+                        targetAnchors = activeLayer.vectorMask.pathAnchors;
+                        targetClosed = !!activeLayer.vectorMask.pathClosed;
                      } else if (activeLayer?.shapeType === 'path') {
                         targetAnchors = activeLayer.pathAnchors;
                         targetClosed = !!activeLayer.pathClosed;
@@ -1442,7 +1493,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                        if (globalDist < 10 / viewport.zoom) {
                          const nl = layers.map(l => {
                             if (l.id === selectedLayerId) {
-                               if (isEditingMask) return { ...l, mask: { ...l.mask!, pathClosed: true } };
+                               if (isEditingMask) return { ...l, vectorMask: { ...l.vectorMask!, pathClosed: true } };
                                return { ...l, pathClosed: true };
                             }
                             return l;
@@ -1456,32 +1507,28 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                        const newAnchors = [...targetAnchors, newPt];
                        const nl = layers.map(l => {
                           if (l.id === selectedLayerId) {
-                             if (isEditingMask) return { ...l, mask: { ...l.mask!, pathAnchors: newAnchors } };
+                             if (isEditingMask) return { ...l, vectorMask: { ...l.vectorMask!, pathAnchors: newAnchors } };
                              return { ...l, pathAnchors: newAnchors };
                           }
                           return l;
                        });
                        setLayers(nl);
-                       penDrawState.current = { isDrawing: true, activePointIndex: newAnchors.length - 1, initialMousePos: { x: relativeX, y: relativeY } };
+                       penDrawState.current = { isDrawing: true, activePointIndex: newAnchors.length - 1, initialMousePos: { x: relativeX, y: relativeY }, layerId: selectedLayerId! };
                      } else {
-                       // Create new path!
-                       if (activeLayer && isEditingMask) {
-                          const nl = layers.map(l => l.id === selectedLayerId ? { ...l, mask: { type: 'path' as const, pathAnchors: [newPt], pathClosed: false, inverted: false } } : l);
-                          setLayers(nl);
-                          penDrawState.current = { isDrawing: true, activePointIndex: 0, initialMousePos: { x: relativeX, y: relativeY } };
-                       } else {
-                          const newId = `shape-layer-${Date.now()}`;
-                          const newLayer: any = {
-                             id: newId, name: `Path Shape`, type: 'shape', shapeType: 'path',
-                             pathAnchors: [newPt], pathClosed: false,
-                             fill: 'transparent', stroke: '#10b981', strokeWidth: 5,
-                             x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1, zIndex: layers.length, visible: true
-                          };
-                          const nl = [...layers, newLayer];
-                          setLayers(nl);
-                          setSelectedLayerId(newId);
-                          penDrawState.current = { isDrawing: true, activePointIndex: 0, initialMousePos: { x: relativeX, y: relativeY } };
+                       if (activeLayer?.type === 'shape' || isEditingMask) {
+                          return;
                        }
+                       const newId = `shape-layer-${Date.now()}`;
+                       const newLayer: any = {
+                          id: newId, name: `Path Shape`, type: 'shape', shapeType: 'path',
+                          pathAnchors: [newPt], pathClosed: false,
+                          fill: 'transparent', stroke: '#10b981', strokeWidth: 5,
+                          x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1, zIndex: layers.length, visible: true
+                       };
+                       const nl = [...layers, newLayer];
+                       setLayers(nl);
+                       setSelectedLayerId(newId);
+                       penDrawState.current = { isDrawing: true, activePointIndex: 0, initialMousePos: { x: relativeX, y: relativeY }, layerId: newId };
                      }
                      return;
                   }
@@ -1513,14 +1560,32 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                      
                      const activeLayer = layers.find(l => l.id === selectedLayerId);
                      
-                     if (activeLayer && activeLayer.type === 'brush') {
+                     if (activeLayer && activeLayer.activeEditingTarget === 'rasterMask') {
+                       const img = layerImages[activeLayer.id];
+                       const w = img ? img.width : (activeLayer.width || 0);
+                       const h = img ? img.height : (activeLayer.height || 0);
+                       const node = new Konva.Group({
+                          x: activeLayer.x || 0, y: activeLayer.y || 0, scaleX: activeLayer.scaleX !== undefined ? activeLayer.scaleX : 1, scaleY: activeLayer.scaleY !== undefined ? activeLayer.scaleY : 1,
+                          rotation: activeLayer.rotation || 0,
+                          offsetX: activeLayer.type === 'image' || img ? w/2 : 0,
+                          offsetY: activeLayer.type === 'image' || img ? h/2 : 0
+                       });
+                       const transform = node.getTransform().copy().invert();
+                       const localPt = transform.point({ x: relativeX, y: relativeY });
+                       
+                       const newLines = activeLayer.rasterMask?.lines ? [...activeLayer.rasterMask.lines] : [];
+                       newLines.push({ points: [localPt.x, localPt.y], size: brushSettings.size, opacity: brushSettings.opacity, hardness: brushSettings.hardness, mode: e.evt.altKey ? 'restore' : 'erase' });
+
+                       const nl = layers.map(l => l.id === selectedLayerId ? { ...l, rasterMask: { ...l.rasterMask!, lines: newLines, visible: true, inverted: !!l.rasterMask?.inverted } } : l);
+                       setLayers(nl);
+                     } else if (activeLayer && activeLayer.type === 'brush') {
                        const layerX = activeLayer.x || 0;
                        const layerY = activeLayer.y || 0;
                        const ptX = (relativeX - layerX) / (activeLayer.scaleX || 1);
                        const ptY = (relativeY - layerY) / (activeLayer.scaleY || 1);
                        
                        const newLines = activeLayer.lines ? [...activeLayer.lines] : [];
-                       newLines.push({ points: [ptX, ptY] });
+                       newLines.push({ points: [ptX, ptY], size: brushSettings.size, opacity: brushSettings.opacity, hardness: brushSettings.hardness });
 
                        const nl = layers.map(l => l.id === selectedLayerId ? { ...l, lines: newLines } : l);
                        setLayers(nl);
@@ -1531,7 +1596,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                           name: `Brush Layer`,
                           type: 'brush',
                           points: [],
-                          lines: [{ points: [relativeX, relativeY] }],
+                          lines: [{ points: [relativeX, relativeY], size: brushSettings.size, opacity: brushSettings.opacity, hardness: brushSettings.hardness }],
                           stroke: '#10b981',
                           strokeWidth: 5,
                           tension: 0.5,
@@ -1557,7 +1622,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                      return;
                   }
 
-                  if (toolMode === "pen" && penDrawState.current.isDrawing && selectedLayerId) {
+                  if (toolMode === "pen" && penDrawState.current.isDrawing) {
                      const stage = e.target.getStage();
                      if (!stage) return;
                      const pos = stage.getPointerPosition();
@@ -1570,10 +1635,11 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                    
                      if (Math.hypot(dx, dy) > 2 / viewport.zoom) {
                        setLayers(prev => prev.map(l => {
-                          if (l.id !== selectedLayerId) return l;
-                          const isEditingMask = l.type === 'image';
+                          const targetLayerId = penDrawState.current.layerId || selectedLayerId;
+                          if (l.id !== targetLayerId) return l;
+                          const isEditingMask = l.activeEditingTarget === 'vectorMask';
                           
-                          let targetAnchors = isEditingMask ? l.mask?.pathAnchors : l.pathAnchors;
+                          let targetAnchors = isEditingMask ? l.vectorMask?.pathAnchors : l.pathAnchors;
                           if (!targetAnchors) return l;
                           
                           // Transform dx/dy into local space of the layer
@@ -1582,13 +1648,16 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                           const h = img ? img.height : (l.height || 0);
                           const node = new Konva.Group({
                              x: l.x || 0, y: l.y || 0, scaleX: l.scaleX !== undefined ? l.scaleX : 1, scaleY: l.scaleY !== undefined ? l.scaleY : 1,
-                             rotation: l.rotation || 0, offsetX: l.type === 'image' || img ? w/2 : 0, offsetY: l.type === 'image' || img ? h/2 : 0
+                             rotation: l.rotation || 0,
+                             offsetX: l.type === 'image' || img ? w/2 : 0,
+                             offsetY: l.type === 'image' || img ? h/2 : 0
                           });
                           const transform = node.getTransform().copy().invert();
                           const localCurrentPos = transform.point({ x: relativeX, y: relativeY });
                           
                           const anchors = [...targetAnchors];
                           const i = penDrawState.current.activePointIndex;
+                          if (i < 0 || i >= anchors.length || !anchors[i]) return l;
                           
                           // The handleOut is simply the local mouse position
                           // The handleIn is mirrored
@@ -1601,8 +1670,8 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                             handleOut: { x: localCurrentPos.x, y: localCurrentPos.y },
                             handleIn: { x: anchors[i].x - localDx, y: anchors[i].y - localDy }
                           };
-                          
-                          if (isEditingMask) return { ...l, mask: { ...l.mask!, pathAnchors: anchors } };
+                                                    
+                          if (isEditingMask) return { ...l, vectorMask: { ...l.vectorMask!, pathAnchors: anchors } };
                           return { ...l, pathAnchors: anchors };
                        }));
                      }
@@ -1639,7 +1708,27 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                   const relativeY = (pos.y - viewport.panY) / viewport.zoom - dimensions.height / 2;
                   
                   setLayers(prev => prev.map(l => {
-                     if (l.id === selectedLayerId && l.type === 'brush') {
+                     if (l.id === selectedLayerId && l.activeEditingTarget === 'rasterMask') {
+                        const img = layerImages[l.id];
+                        const w = img ? img.width : (l.width || 0);
+                        const h = img ? img.height : (l.height || 0);
+                        const node = new Konva.Group({
+                           x: l.x || 0, y: l.y || 0, scaleX: l.scaleX !== undefined ? l.scaleX : 1, scaleY: l.scaleY !== undefined ? l.scaleY : 1,
+                           rotation: l.rotation || 0,
+                           offsetX: l.type === 'image' || img ? w/2 : 0,
+                           offsetY: l.type === 'image' || img ? h/2 : 0
+                        });
+                        const transform = node.getTransform().copy().invert();
+                        const localPt = transform.point({ x: relativeX, y: relativeY });
+
+                        const lines = l.rasterMask?.lines ? [...l.rasterMask.lines] : [];
+                        if (lines.length > 0) {
+                            const lastLine = { ...lines[lines.length - 1] };
+                            lastLine.points = [...lastLine.points, localPt.x, localPt.y];
+                            lines[lines.length - 1] = lastLine;
+                        }
+                        return { ...l, rasterMask: { ...l.rasterMask!, lines, visible: true, inverted: !!l.rasterMask?.inverted } };
+                     } else if (l.id === selectedLayerId && l.type === 'brush') {
                         const layerX = l.x || 0;
                         const layerY = l.y || 0;
                         const ptX = (relativeX - layerX) / (l.scaleX || 1);
@@ -1830,13 +1919,13 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                            );
                         }
 
-                        if (activeLayer.mask && activeLayer.mask.type === 'path' && activeLayer.mask.pathAnchors) {
+                        if (activeLayer.vectorMask && activeLayer.vectorMask.pathAnchors) {
                            return (
                              <PathEditorOverlay
-                               anchors={activeLayer.mask.pathAnchors}
-                               closed={true}
+                               anchors={activeLayer.vectorMask.pathAnchors}
+                               closed={!!activeLayer.vectorMask.pathClosed}
                                onChange={(newAnchors, closed) => {
-                                  const nl = layers.map(l => l.id === selectedLayerId ? { ...l, mask: { ...l.mask!, pathAnchors: newAnchors } } : l);
+                                  const nl = layers.map(l => l.id === selectedLayerId ? { ...l, vectorMask: { ...l.vectorMask!, pathAnchors: newAnchors, pathClosed: closed } } : l);
                                   setLayers(nl);
                                   saveLayersToNode(nl);
                                }}
@@ -1866,9 +1955,62 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
           {/* Transform Panel (Removed - Replaced by left Inspector Panel) */}
         </div>
 
-        {/* Layer Panel (Right Sidebar) */}
+        {/* Right Sidebar */}
         <div className="w-64 bg-[#15101f] border-l border-emerald-500/20 flex flex-col z-40">
-          <div className="p-3 border-b border-white/5 bg-black/20 flex justify-between items-center">
+          
+          {/* Tool Properties Panel */}
+          <div className="flex-1 flex flex-col min-h-0 border-b border-emerald-500/20">
+            <div className="p-3 border-b border-white/5 bg-black/20 flex justify-between items-center">
+               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tool Properties</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+               {toolMode === 'brush' ? (
+                 <>
+                   <div className="space-y-2">
+                     <div className="flex justify-between text-xs text-gray-400">
+                       <span>Size</span>
+                       <span>{brushSettings.size}px</span>
+                     </div>
+                     <input 
+                       type="range" min="1" max="200" value={brushSettings.size}
+                       onChange={(e) => setBrushSettings(prev => ({ ...prev, size: parseInt(e.target.value) }))}
+                       className="w-full accent-emerald-500"
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <div className="flex justify-between text-xs text-gray-400">
+                       <span>Opacity</span>
+                       <span>{brushSettings.opacity}%</span>
+                     </div>
+                     <input 
+                       type="range" min="1" max="100" value={brushSettings.opacity}
+                       onChange={(e) => setBrushSettings(prev => ({ ...prev, opacity: parseInt(e.target.value) }))}
+                       className="w-full accent-emerald-500"
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <div className="flex justify-between text-xs text-gray-400">
+                       <span>Hardness (Placeholder)</span>
+                       <span>{brushSettings.hardness}%</span>
+                     </div>
+                     <input 
+                       type="range" min="0" max="100" value={brushSettings.hardness}
+                       onChange={(e) => setBrushSettings(prev => ({ ...prev, hardness: parseInt(e.target.value) }))}
+                       className="w-full accent-emerald-500"
+                     />
+                   </div>
+                 </>
+               ) : (
+                 <div className="text-xs text-gray-500 text-center mt-4">
+                   No properties for selected tool.
+                 </div>
+               )}
+            </div>
+          </div>
+
+          {/* Layer Panel */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="p-3 border-b border-white/5 bg-black/20 flex justify-between items-center">
             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Layers</h2>
             <button onClick={() => {
                const newId = `blank-layer-${Date.now()}`;
@@ -1934,18 +2076,44 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
                 <div className="text-gray-600 hover:text-gray-400 cursor-grab active:cursor-grabbing">
                    <GripVertical className="w-4 h-4" />
                 </div>
-                <div className="w-10 h-10 bg-black/40 rounded flex-shrink-0 flex items-center justify-center" style={(!layer.type || layer.type === 'image') ? { backgroundImage: `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`, backgroundSize: '8px 8px' } : {}}>
-                  {(!layer.type || layer.type === 'image') && layerImages[layer.id] ? (
-                     <img src={layerImages[layer.id].src} className="w-full h-full object-contain" draggable={false} />
-                  ) : layer.type === 'text' ? (
-                     <Type className="w-5 h-5 text-gray-400" />
-                  ) : layer.type === 'shape' ? (
-                     layer.shapeType === 'rect' ? <Square className="w-5 h-5 text-gray-400" /> :
-                     layer.shapeType === 'circle' ? <Circle className="w-5 h-5 text-gray-400" /> :
-                     <StarIcon className="w-5 h-5 text-gray-400" />
-                  ) : layer.type === 'brush' ? (
-                     <Brush className="w-5 h-5 text-gray-400" />
-                  ) : null}
+                <div className="flex gap-1 items-center flex-shrink-0">
+                  <div 
+                    onClick={(e) => { e.stopPropagation(); const nl = layers.map(l => l.id === layer.id ? { ...l, activeEditingTarget: 'image' as const } : l); setLayers(nl); setSelectedLayerId(layer.id); }}
+                    className={`w-10 h-10 bg-black/40 rounded flex items-center justify-center border-2 transition-colors ${selectedLayerId === layer.id && layer.activeEditingTarget !== 'rasterMask' && layer.activeEditingTarget !== 'vectorMask' ? 'border-emerald-500' : 'border-transparent'}`} 
+                    style={(!layer.type || layer.type === 'image') ? { backgroundImage: `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`, backgroundSize: '8px 8px' } : {}}
+                  >
+                    {(!layer.type || layer.type === 'image') && layerImages[layer.id] ? (
+                       <img src={layerImages[layer.id].src} className="w-full h-full object-contain" draggable={false} />
+                    ) : layer.type === 'text' ? (
+                       <Type className="w-5 h-5 text-gray-400" />
+                    ) : layer.type === 'shape' ? (
+                       layer.shapeType === 'rect' ? <Square className="w-5 h-5 text-gray-400" /> :
+                       layer.shapeType === 'circle' ? <Circle className="w-5 h-5 text-gray-400" /> :
+                       <StarIcon className="w-5 h-5 text-gray-400" />
+                    ) : layer.type === 'brush' ? (
+                       <Brush className="w-5 h-5 text-gray-400" />
+                    ) : null}
+                  </div>
+                  
+                  {layer.rasterMask && (
+                    <div 
+                      onClick={(e) => { e.stopPropagation(); const nl = layers.map(l => l.id === layer.id ? { ...l, activeEditingTarget: 'rasterMask' as const } : l); setLayers(nl); setSelectedLayerId(layer.id); setToolMode("brush"); }}
+                      className={`w-10 h-10 bg-white rounded flex items-center justify-center border-2 cursor-pointer transition-colors ${selectedLayerId === layer.id && layer.activeEditingTarget === 'rasterMask' ? 'border-emerald-500' : 'border-transparent'}`}
+                      title="Raster Mask"
+                    >
+                      <div className="w-5 h-5 bg-black rounded-full opacity-50" />
+                    </div>
+                  )}
+
+                  {layer.vectorMask && (
+                    <div 
+                      onClick={(e) => { e.stopPropagation(); const nl = layers.map(l => l.id === layer.id ? { ...l, activeEditingTarget: 'vectorMask' as const } : l); setLayers(nl); setSelectedLayerId(layer.id); setToolMode("pen"); }}
+                      className={`w-10 h-10 bg-black/60 rounded flex items-center justify-center border-2 cursor-pointer transition-colors ${selectedLayerId === layer.id && layer.activeEditingTarget === 'vectorMask' ? 'border-emerald-500' : 'border-transparent'}`}
+                      title="Vector Mask"
+                    >
+                      <PenTool className="w-4 h-4 text-gray-300" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold truncate text-gray-200">{layer.name}</p>
@@ -1966,6 +2134,7 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
               </div>
             ))}
           </div>
+        </div>
         </div>
       </div>
     </div>

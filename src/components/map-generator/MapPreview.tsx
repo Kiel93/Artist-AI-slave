@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, PointerEvent } from "react";
+import { useEffect, useRef, useState, PointerEvent, startTransition } from "react";
 import { MapAsset, ObjectAsset, MapParameters, InstanceOverride, SelectionState } from "./MapGeneratorWorkspace";
 import { TerrainGenerator, MapGridCell, PlacedObject } from "@/lib/map-engine/TerrainGenerator";
 import { Loader2, Grid3X3, AlertTriangle, MousePointer2, Paintbrush, Eraser, Eye, EyeOff, Layers, Trash2 } from "lucide-react";
@@ -131,7 +131,6 @@ export default function MapPreview({
   const [gridLevels, setGridLevels] = useState<Record<number, MapGridCell[][]>>({});
   const [images, setImages] = useState<Record<string, HTMLImageElement>>({});
   const [isRendering, setIsRendering] = useState(false);
-  const [zoomMultiplier, setZoomMultiplier] = useState(1);
   const [gridSettings, setGridSettings] = useState({
     show: false,
     showOnlyBuildable: false,
@@ -146,8 +145,10 @@ export default function MapPreview({
   const [dragSlot, setDragSlot] = useState<InstanceOverride | null>(null);
   const [isErasing, setIsErasing] = useState(false);
 
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
+  const [isCameraInitialized, setIsCameraInitialized] = useState(false);
   const [isMapPanning, setIsMapPanning] = useState(false);
+  const lastStatsRef = useRef<string>('');
   const [isPainting, setIsPainting] = useState(false);
   const paintStrokesRef = useRef<Record<string, number>>({});
   const [brushPos, setBrushPos] = useState<{ gx: number, gy: number, cellX: number, cellY: number, isValid: boolean, level: number, isoX?: number, isoY?: number } | null>(null);
@@ -181,8 +182,64 @@ export default function MapPreview({
     });
   };
 
+  useEffect(() => {
+    setIsCameraInitialized(false);
+  }, [parameters.canvasWidth, parameters.canvasHeight]);
+
+  useEffect(() => {
+    if (!canvasRef.current || !containerRef.current) return;
+    if (Object.keys(gridLevels).length === 0) return;
+    if (isCameraInitialized) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width: clientWidth, height: clientHeight } = entry.contentRect;
+      if (clientWidth < 10 || clientHeight < 10) return;
+
+      const tileHalfWidth = 140;
+      const tileHalfHeight = 70;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      
+      const grid = gridLevels[1] || [];
+      for (let row = 0; row < grid.length; row++) {
+        for (let col = 0; col < grid[row].length; col++) {
+          const isoX = (col - row) * tileHalfWidth;
+          const isoY = -(col + row) * tileHalfHeight;
+          if (isoX < minX) minX = isoX;
+          if (isoX > maxX) maxX = isoX;
+          if (isoY < minY) minY = isoY;
+          if (isoY > maxY) maxY = isoY;
+        }
+      }
+
+      if (minX === Infinity) return;
+
+      const gridWidth = maxX - minX + (tileHalfWidth * 2);
+      const gridHeight = maxY - minY + (tileHalfHeight * 4);
+
+      const padding = 50;
+      const autoScaleX = (clientWidth - padding * 2) / gridWidth;
+      const autoScaleY = (clientHeight - padding * 2) / gridHeight;
+      const autoScale = Math.max(0.1, Math.min(autoScaleX, autoScaleY, 1));
+
+      const offsetX = (clientWidth / 2) - ((minX + maxX) / 2) * autoScale;
+      const offsetY = (clientHeight / 2) - ((minY + maxY) / 2) * autoScale - (tileHalfHeight * autoScale);
+
+      setCamera({ x: offsetX, y: offsetY, scale: autoScale });
+      setIsCameraInitialized(true);
+      observer.disconnect();
+    });
+
+    observer.observe(containerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [gridLevels, isCameraInitialized]);
+
   // Keep track of render bounds for picking math
-  const transformRef = useRef({ offsetX: 0, offsetY: 0, finalScale: 1, autoScale: 1 });
+  const transformRef = useRef({ offsetX: 0, offsetY: 0, finalScale: 1 });
   // Keep track of rendered objects for hit testing
   const renderedObjectsRef = useRef<{ id: string, instanceId: string, isoX: number, isoY: number, objW: number, objH: number }[]>([]);
   // Keep track of occupancy for grid rendering
@@ -523,9 +580,13 @@ export default function MapPreview({
       mapDataRef.current.objectInstances = finalObjects;
     }
     if (onStatsChange) {
-      onStatsChange(newStats);
+      const statsJson = JSON.stringify(newStats);
+      if (lastStatsRef.current !== statsJson) {
+        lastStatsRef.current = statsJson;
+        onStatsChange(newStats);
+      }
     }
-  }, [parameters, objectAssets, instanceOverrides, groundOverrides, draggedInstance, dragSlot, levels, oceanOverrides]);
+  }, [parameters, objectAssets, instanceOverrides, groundOverrides, draggedInstance, dragSlot, levels, oceanOverrides, onStatsChange]);
 
   // Load images when ground asset changes
   useEffect(() => {
@@ -795,19 +856,11 @@ export default function MapPreview({
       }
     }
 
-    const gridWidth = maxX - minX + (tileHalfWidth * 2);
-    const gridHeight = maxY - minY + (tileHalfHeight * 4);
+    const finalScale = camera.scale;
+    const offsetX = camera.x;
+    const offsetY = camera.y;
 
-    const padding = 50;
-    const autoScaleX = (clientWidth - padding * 2) / gridWidth;
-    const autoScaleY = (clientHeight - padding * 2) / gridHeight;
-    const autoScale = Math.min(autoScaleX, autoScaleY, 1);
-    const finalScale = autoScale * zoomMultiplier;
-
-    const offsetX = (clientWidth / 2) - ((minX + maxX) / 2) * finalScale + panOffset.x;
-    const offsetY = (clientHeight / 2) - ((minY + maxY) / 2) * finalScale - (tileHalfHeight * finalScale) + panOffset.y;
-
-    transformRef.current = { offsetX, offsetY, finalScale, autoScale };
+    transformRef.current = { offsetX, offsetY, finalScale };
     renderedObjectsRef.current = [];
 
     ctx.save();
@@ -1350,7 +1403,7 @@ export default function MapPreview({
             const scale = (activeSelection.type === 'object' ? (assetInfo.scale || 1) : (assetInfo.size || 1));
             const isDynamic = activeSelection.type === 'dynamic_decal';
             const slotIsoX = isDynamic && brushPos.isoX !== undefined ? brushPos.isoX : (brushPos.gx - brushPos.gy) * dx;
-            const slotIsoY = isDynamic && brushPos.isoY !== undefined ? brushPos.isoY : -(brushPos.gx + brushPos.gy) * dy - brushYOffset;
+            const slotIsoY = isDynamic && brushPos.isoY !== undefined ? brushPos.isoY : -(brushPos.gx + brushPos.gy - 2) * dy - brushYOffset;
 
             ctx.fillStyle = tintColor;
             ctx.beginPath();
@@ -1385,7 +1438,7 @@ export default function MapPreview({
     }
 
     ctx.restore();
-  }, [gridLevels, levels, images, zoomMultiplier, draggedInstance, gridSettings, panOffset, activeSelection, activeTool, brushPos]);
+  }, [gridLevels, levels, images, camera, draggedInstance, gridSettings, activeSelection, activeTool, brushPos]);
 
   // Interactivity Handlers
   const handlePointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
@@ -1426,15 +1479,17 @@ export default function MapPreview({
         setDragSlot(null);
         e.currentTarget.setPointerCapture(e.pointerId);
         if (setActiveSelection) setActiveSelection({ type: 'object', id: picked.id, instanceId: picked.instanceId });
-      } else if (activeTool === 'erase') {
+      } else if (activeTool === 'erase' && activeSelection?.type === 'object' && activeSelection.id === picked.id) {
         // Erase object
-        setInstanceOverrides(prev => ({
-          ...prev,
-          [picked.instanceId]: {
-            ...(prev[picked.instanceId] || { cellX: 0, cellY: 0, lx: 0, ly: 0 }),
-            deleted: true
-          }
-        }));
+        startTransition(() => {
+          setInstanceOverrides(prev => ({
+            ...prev,
+            [picked.instanceId]: {
+              ...(prev[picked.instanceId] || { cellX: 0, cellY: 0, lx: 0, ly: 0 }),
+              deleted: true
+            }
+          }));
+        });
       }
     }
 
@@ -1470,7 +1525,9 @@ export default function MapPreview({
           }
         }
         if (hasChanges) {
-          setGroundOverrides(prev => ({ ...prev, ...newStrokes }));
+          startTransition(() => {
+            setGroundOverrides(prev => ({ ...prev, ...newStrokes }));
+          });
         }
       } else if (activeSelection?.type === 'ocean') {
         const cellX = Math.floor((gx + 1) / 3);
@@ -1488,7 +1545,9 @@ export default function MapPreview({
           }
         }
         if (hasChanges && setOceanOverrides) {
-          setOceanOverrides(prev => ({ ...prev, ...newStrokes }));
+          startTransition(() => {
+            setOceanOverrides(prev => ({ ...prev, ...newStrokes }));
+          });
         }
       } else if (activeSelection?.type === 'object') {
         const cellX = Math.floor(gx / 3);
@@ -1508,17 +1567,19 @@ export default function MapPreview({
         if (!paintStrokesRef.current[strokeKey]) {
           paintStrokesRef.current[strokeKey] = activeLevel;
           const newInstanceId = `painted_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-          setInstanceOverrides(prev => ({
-            ...prev,
-            [newInstanceId]: {
-              cellX,
-              cellY,
-              lx: gx - cellX * 3 - 1,
-              ly: gy - cellY * 3 - 1,
-              layer: maxLevel === 0 ? 1 : maxLevel,
-              assetId: activeSelection.id
-            } as any
-          }));
+          startTransition(() => {
+            setInstanceOverrides(prev => ({
+              ...prev,
+              [newInstanceId]: {
+                cellX,
+                cellY,
+                lx: gx - cellX * 3 - 1,
+                ly: gy - cellY * 3 - 1,
+                layer: maxLevel === 0 ? 1 : maxLevel,
+                assetId: activeSelection.id
+              } as any
+            }));
+          });
         }
       } else if (activeSelection?.type === 'ground_variation' && activeSelection.id) {
         const cellX = Math.floor(gx / 3);
@@ -1539,17 +1600,19 @@ export default function MapPreview({
           paintStrokesRef.current[strokeKey] = activeLevel;
           const newInstanceId = `decal_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
           if (setDecalOverrides) {
-            setDecalOverrides(prev => ({
-              ...prev,
-              [newInstanceId]: {
-                cellX,
-                cellY,
-                lx,
-                ly,
-                layer: maxLevel === 0 ? 1 : maxLevel,
-                assetId: activeSelection.id
-              } as any
-            }));
+            startTransition(() => {
+              setDecalOverrides(prev => ({
+                ...prev,
+                [newInstanceId]: {
+                  cellX,
+                  cellY,
+                  lx,
+                  ly,
+                  layer: maxLevel === 0 ? 1 : maxLevel,
+                  assetId: activeSelection.id
+                } as any
+              }));
+            });
           }
         }
       } else if (activeSelection?.type === 'dynamic_decal' && activeSelection.id && isoX !== undefined && isoY !== undefined) {
@@ -1558,16 +1621,18 @@ export default function MapPreview({
           paintStrokesRef.current[strokeKey] = 1;
           const newInstanceId = `dyn_decal_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
           if (setDecalOverrides) {
-            setDecalOverrides(prev => ({
-              ...prev,
-              [newInstanceId]: {
-                isDynamic: true,
-                worldX: isoX,
-                worldY: isoY,
-                layer: 1,
-                assetId: activeSelection.id
-              } as any
-            }));
+            startTransition(() => {
+              setDecalOverrides(prev => ({
+                ...prev,
+                [newInstanceId]: {
+                  isDynamic: true,
+                  worldX: isoX,
+                  worldY: isoY,
+                  layer: 1,
+                  assetId: activeSelection.id
+                } as any
+              }));
+            });
           }
         }
       }
@@ -1578,7 +1643,9 @@ export default function MapPreview({
         const key = `${activeLevel},${cellX},${cellY}`;
         if (groundOverrides[key] !== 0 && paintStrokesRef.current[key] !== 0) {
           paintStrokesRef.current[key] = 0;
-          setGroundOverrides(prev => ({ ...prev, [key]: 0 }));
+          startTransition(() => {
+            setGroundOverrides(prev => ({ ...prev, [key]: 0 }));
+          });
         }
       } else if (activeSelection?.type === 'ocean') {
         const cellX = Math.floor((gx + 1) / 3);
@@ -1587,10 +1654,12 @@ export default function MapPreview({
         if (oceanOverrides && oceanOverrides[key] !== undefined && paintStrokesRef.current[key] !== -1) {
           paintStrokesRef.current[key] = -1;
           if (setOceanOverrides) {
-            setOceanOverrides(prev => {
-              const next = { ...prev };
-              delete next[key];
-              return next;
+            startTransition(() => {
+              setOceanOverrides(prev => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+              });
             });
           }
         }
@@ -1609,14 +1678,18 @@ export default function MapPreview({
               erased = true;
             }
           }
-          if (erased) setDecalOverrides(newOverrides);
+          if (erased) {
+            startTransition(() => {
+              setDecalOverrides(newOverrides);
+            });
+          }
         }
       } else if (activeSelection?.type === 'dynamic_decal' && isoX !== undefined && isoY !== undefined) {
         if (setDecalOverrides && decalOverrides) {
           const newOverrides = { ...decalOverrides };
           let erased = false;
           for (const [id, dec] of Object.entries(newOverrides)) {
-            if ((dec as any).isDynamic && !dec.deleted) {
+            if ((dec as any).isDynamic && !dec.deleted && dec.assetId === activeSelection.id) {
               const dx = (dec as any).worldX - isoX;
               const dy = (dec as any).worldY - isoY;
               const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1626,7 +1699,11 @@ export default function MapPreview({
               }
             }
           }
-          if (erased) setDecalOverrides(newOverrides);
+          if (erased) {
+            startTransition(() => {
+              setDecalOverrides(newOverrides);
+            });
+          }
         }
       }
     }
@@ -1636,7 +1713,7 @@ export default function MapPreview({
     if (isMapPanning) {
       const dx = e.clientX - lastPanPos.x;
       const dy = e.clientY - lastPanPos.y;
-      setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+      setCamera(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
       setLastPanPos({ x: e.clientX, y: e.clientY });
       return;
     }
@@ -1691,14 +1768,16 @@ export default function MapPreview({
           break;
         }
       }
-      if (picked) {
-        setInstanceOverrides(prev => ({
-          ...prev,
-          [picked.instanceId]: {
-            ...(prev[picked.instanceId] || { cellX: 0, cellY: 0, lx: 0, ly: 0 }),
-            deleted: true
-          } as any
-        }));
+      if (picked && activeSelection?.type === 'object' && activeSelection.id === picked.id) {
+        startTransition(() => {
+          setInstanceOverrides(prev => ({
+            ...prev,
+            [picked.instanceId]: {
+              ...(prev[picked.instanceId] || { cellX: 0, cellY: 0, lx: 0, ly: 0 }),
+              deleted: true
+            } as any
+          }));
+        });
       }
     } else if (isPainting && activeTool !== 'select') {
       applyPaintErase(gx, gy, activeTool as 'paint' | 'erase', isoX, isoY);
@@ -1786,16 +1865,28 @@ export default function MapPreview({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onWheel={(e) => {
-              setZoomMultiplier(prev => {
-                const autoScale = transformRef.current.autoScale || 1;
-                const minZoom = 0.5; // Dynamic zoom out (stops when map fills 50% of screen)
-                const maxFinalScale = 3.0; // Constant zoom in max
-                const maxZoom = Math.max(minZoom, maxFinalScale / autoScale);
+              const rect = e.currentTarget.getBoundingClientRect();
+              const mouseX = e.clientX - rect.left;
+              const mouseY = e.clientY - rect.top;
+              const deltaY = e.deltaY;
+
+              setCamera(prev => {
+                const minZoom = 0.1; 
+                const maxZoom = 5.0; 
                 
                 // Exponential zoom for smoother zooming at extremes
-                const zoomSpeed = prev * 0.15;
-                const delta = e.deltaY < 0 ? zoomSpeed : -zoomSpeed;
-                return Math.max(minZoom, Math.min(prev + delta, maxZoom));
+                const zoomSpeed = prev.scale * 0.15;
+                const delta = deltaY < 0 ? zoomSpeed : -zoomSpeed;
+                const newScale = Math.max(minZoom, Math.min(prev.scale + delta, maxZoom));
+                
+                if (newScale === prev.scale) return prev;
+                
+                // Focal point zoom
+                const scaleFactor = newScale / prev.scale;
+                const newX = mouseX - (mouseX - prev.x) * scaleFactor;
+                const newY = mouseY - (mouseY - prev.y) * scaleFactor;
+                
+                return { x: newX, y: newY, scale: newScale };
               });
             }}
           />

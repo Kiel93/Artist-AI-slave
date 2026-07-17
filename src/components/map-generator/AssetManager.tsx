@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Folder, Plus, Check, Loader2, Settings, Upload, ChevronDown } from "lucide-react";
+import { Folder, Plus, Check, Loader2, Settings, Upload, ChevronDown, Download } from "lucide-react";
 import { getProjects, Project, Task } from "@/lib/store";
 import { MapAsset, ObjectAsset, SelectionState } from "./MapGeneratorWorkspace";
 
@@ -17,6 +17,7 @@ interface AssetManagerProps {
   replaceAssetId?: string | null;
   setReplaceAssetId?: (id: string | null) => void;
   objectStats?: Record<string, number>;
+  currentTaskId?: string;
 }
 
 export default function AssetManager({ 
@@ -32,7 +33,8 @@ export default function AssetManager({
   setActiveSelection,
   replaceAssetId,
   setReplaceAssetId,
-  objectStats = {}
+  objectStats = {},
+  currentTaskId
 }: AssetManagerProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -45,6 +47,18 @@ export default function AssetManager({
   const [isOceanExpanded, setIsOceanExpanded] = useState(true);
   const [isObjectsExpanded, setIsObjectsExpanded] = useState(true);
   const [isDecalsExpanded, setIsDecalsExpanded] = useState(true);
+
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+
+  type SelectedAssetInfo = {
+    task: any;
+    node: any;
+    importType: 'ground' | 'ocean' | 'object' | 'ground_variation' | 'dynamic_decal';
+    imageUrl: string;
+    isAlreadyImported: boolean;
+  };
+  const [selectedAsset, setSelectedAsset] = useState<SelectedAssetInfo | null>(null);
 
   const loadAndMeasureImage = (url: string): Promise<{ width: number, height: number, sizeBytes: number }> => {
     return new Promise((resolve) => {
@@ -64,9 +78,30 @@ export default function AssetManager({
 
   useEffect(() => {
     if (isImportModalOpen) {
-      getProjects().then(setProjects);
+      getProjects().then(fetchedProjects => {
+        setProjects(fetchedProjects);
+        
+        const newExpandedProjects: Record<string, boolean> = {};
+        const newExpandedTasks: Record<string, boolean> = {};
+        
+        for (const p of fetchedProjects) {
+          let hasCurrentTask = false;
+          for (const t of p.tasks) {
+            if (t.id === currentTaskId) {
+              hasCurrentTask = true;
+              newExpandedTasks[t.id] = true;
+            } else {
+              newExpandedTasks[t.id] = false;
+            }
+          }
+          newExpandedProjects[p.id] = hasCurrentTask;
+        }
+        
+        setExpandedProjects(newExpandedProjects);
+        setExpandedTasks(newExpandedTasks);
+      });
     }
-  }, [isImportModalOpen]);
+  }, [isImportModalOpen, currentTaskId]);
 
   useEffect(() => {
     if (replaceAssetId) {
@@ -76,16 +111,20 @@ export default function AssetManager({
         setImportType('ocean');
       } else if (replaceAssetId.startsWith('ground_variation_')) {
         setImportType('ground_variation');
+      } else if (replaceAssetId.startsWith('decal_')) {
+        setImportType('dynamic_decal');
       } else {
         setImportType('object');
       }
       setIsImportModalOpen(true);
       setError(null);
+      setSelectedAsset(null);
     }
   }, [replaceAssetId]);
 
   const closeModal = () => {
     setIsImportModalOpen(false);
+    setSelectedAsset(null);
     if (setReplaceAssetId) setReplaceAssetId(null);
   };
 
@@ -93,6 +132,7 @@ export default function AssetManager({
     setImportType(type);
     setIsImportModalOpen(true);
     setError(null);
+    setSelectedAsset(null);
   };
 
   const handleImportGroundOrOcean = async (task: Task, type: 'ground' | 'ocean', nodeId: string) => {
@@ -158,6 +198,16 @@ export default function AssetManager({
           newSlices[sliceIdx].variations!.push({ url: imageUrl, factor: 0, taskId: task.id, nodeId: node.id, opacity: 1, seamSmoothing: 0 });
           setGroundAsset({ ...groundAsset, slices: newSlices });
         }
+      } else if (replaceAssetId && replaceAssetId.startsWith('decal_')) {
+        const decalId = replaceAssetId.substring(6);
+        setDecalAssets(decalAssets.map(d => d.id === decalId ? {
+          ...d,
+          taskId: task.id,
+          taskName: task.name,
+          nodeId: node.id,
+          imageUrl
+        } : d));
+        setActiveSelection({ type: 'dynamic_decal', id: decalId });
       } else if (replaceAssetId) {
         const stats = await loadAndMeasureImage(imageUrl);
         setObjectAssets(objectAssets.map(a => a.id === replaceAssetId ? {
@@ -313,10 +363,10 @@ export default function AssetManager({
           {isDecalsExpanded && (
             <div className="space-y-1">
               {decalAssets.map((decal) => (
-                <button
+                <div
                   key={decal.id}
                   onClick={() => setActiveSelection({ type: 'dynamic_decal', id: decal.id })}
-                  className={`w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center justify-between group ${
+                  className={`cursor-pointer w-full text-left bg-black/40 border rounded-sm p-2 transition-all flex items-center justify-between group ${
                     activeSelection.type === 'dynamic_decal' && activeSelection.id === decal.id
                       ? 'border-emerald-500/60 bg-emerald-900/20'
                       : 'border-transparent hover:border-emerald-500/30'
@@ -330,20 +380,7 @@ export default function AssetManager({
                       <div className="text-sm font-medium text-emerald-100 truncate">{decal.name}</div>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDecalAssets(decalAssets.filter(d => d.id !== decal.id));
-                      if (activeSelection.type === 'dynamic_decal' && activeSelection.id === decal.id) {
-                        setActiveSelection({ type: 'map' });
-                      }
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:text-white hover:bg-red-500/50 rounded-sm transition-all"
-                  >
-                    <Upload className="w-3.5 h-3.5 hidden" />
-                    <span className="text-xs">🗑️</span>
-                  </button>
-                </button>
+                </div>
               ))}
 
               <button 
@@ -486,22 +523,31 @@ export default function AssetManager({
 
       {/* Import Modal */}
       {isImportModalOpen && (
-        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-sm w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
-            <div className="p-4 border-b border-[var(--color-blender-border)] flex justify-between items-center">
+        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-8 md:p-16 lg:p-24">
+          <div className="bg-[var(--color-blender-panel)] border border-[var(--color-blender-border)] rounded-sm w-full max-w-5xl shadow-2xl flex flex-col h-full max-h-full overflow-hidden">
+            <div className="p-4 border-b border-[var(--color-blender-border)] flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg text-white">
                 {replaceAssetId && replaceAssetId.startsWith('ground_variation_') ? 'Import Variation' : replaceAssetId ? 'Replace Object Asset' : `Import ${importType === 'ground' ? 'Ground Tileset' : 'Object Asset'}`}
               </h3>
               <button onClick={closeModal} className="text-gray-400 hover:text-white">✕</button>
             </div>
             
-            <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              {error && <div className="p-3 bg-red-900/30 border border-red-500/50 rounded-sm text-red-200 text-sm">{error}</div>}
+            <div className="flex flex-row flex-1 overflow-hidden min-h-0">
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                {error && <div className="p-3 bg-red-900/30 border border-red-500/50 rounded-sm text-red-200 text-sm">{error}</div>}
               
-              {projects.map(project => (
+              {projects.map(project => {
+                const isProjectExpanded = expandedProjects[project.id];
+                return (
                 <div key={project.id} className="space-y-2">
-                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{project.name}</h4>
-                  {project.tasks.map(task => {
+                  <div 
+                    className="flex items-center gap-2 cursor-pointer hover:text-indigo-400 group"
+                    onClick={() => setExpandedProjects(prev => ({ ...prev, [project.id]: !prev[project.id] }))}
+                  >
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isProjectExpanded ? '' : '-rotate-90'}`} />
+                    <h4 className="text-xs font-bold text-gray-500 group-hover:text-indigo-400 uppercase tracking-wider select-none">{project.name}</h4>
+                  </div>
+                  {isProjectExpanded && project.tasks.map(task => {
                     if (!task.nodes) return null;
                     
                     if (importType === 'ground' || importType === 'ocean') {
@@ -533,9 +579,16 @@ export default function AssetManager({
                       const themeColor = importType === 'ground' ? 'emerald' : 'blue';
                       
                       return (
-                        <div key={task.id} className="bg-black/20 rounded-sm p-2 border border-gray-800">
-                          <div className="text-xs text-gray-400 mb-2 px-1">{task.name}</div>
-                          <div className="grid grid-cols-4 gap-2">
+                        <div key={task.id} className="bg-black/20 rounded-sm border border-gray-800">
+                          <div 
+                            className="text-xs text-gray-400 px-3 py-2 cursor-pointer hover:bg-black/40 hover:text-indigo-300 flex items-center gap-2 select-none"
+                            onClick={() => setExpandedTasks(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                          >
+                            <ChevronDown className={`w-3 h-3 transition-transform ${expandedTasks[task.id] ? '' : '-rotate-90'}`} />
+                            {task.name}
+                          </div>
+                          {expandedTasks[task.id] && (
+                          <div className="grid gap-2 p-2 pt-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}>
                             {validNodes.map(node => {
                                let imageUrl = node.data.image;
                                if (importType === 'ground' && node.data.slices) {
@@ -544,29 +597,33 @@ export default function AssetManager({
                                    imageUrl = centerFillSlice.url;
                                  }
                                }
-                               return (
-                                <button
-                                  key={node.id}
-                                  onClick={() => handleImportGroundOrOcean(task, importType, node.id)}
-                                  disabled={isLoading}
-                                  className={`aspect-square rounded-sm border border-transparent hover:border-${themeColor}-500/40 bg-black/40 overflow-hidden group relative flex items-center justify-center`}
-                                  title={importType === 'ground' ? "Hex Slicer Node" : "Image Node"}
-                                >
-                                  {imageUrl ? (
-                                    <img src={imageUrl} alt="preview" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                                  ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-gray-500 gap-1 bg-black/50">
-                                      <Folder className="w-4 h-4" />
-                                      Slicer
+                                 const isSelected = selectedAsset?.node.id === node.id;
+                                 return (
+                                  <button
+                                    key={node.id}
+                                    onClick={() => setSelectedAsset({task, node, importType, imageUrl: imageUrl || '', isAlreadyImported: false})}
+                                    disabled={isLoading}
+                                    className={`aspect-square rounded-sm border hover:border-${themeColor}-500/40 bg-black/40 overflow-hidden group relative flex items-center justify-center transition-all ${
+                                      isSelected ? `border-${themeColor}-500 ring-2 ring-${themeColor}-500/50 scale-95` : 'border-transparent'
+                                    }`}
+                                    title={importType === 'ground' ? "Hex Slicer Node" : "Image Node"}
+                                  >
+                                    {imageUrl ? (
+                                      <img src={imageUrl} alt="preview" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                    ) : (
+                                      <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-gray-500 gap-1 bg-black/50">
+                                        <Folder className="w-4 h-4" />
+                                        Slicer
+                                      </div>
+                                    )}
+                                    <div className={`absolute inset-0 bg-${themeColor}-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center`}>
+                                      <Check className={`w-6 h-6 text-${themeColor}-400 drop-shadow-md`} />
                                     </div>
-                                  )}
-                                  <div className={`absolute inset-0 bg-${themeColor}-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center`}>
-                                    <Check className={`w-6 h-6 text-${themeColor}-400 drop-shadow-md`} />
-                                  </div>
-                                </button>
-                               )
+                                  </button>
+                                 )
                             })}
                           </div>
+                          )}
                         </div>
                       );
                     } else {
@@ -592,18 +649,27 @@ export default function AssetManager({
                       if (objectNodes.length === 0) return null;
                       
                       return (
-                        <div key={task.id} className="bg-black/20 rounded-sm p-2 border border-gray-800">
-                          <div className="text-xs text-gray-400 mb-2 px-1">{task.name}</div>
-                          <div className="grid grid-cols-4 gap-2">
+                        <div key={task.id} className="bg-black/20 rounded-sm border border-gray-800">
+                          <div 
+                            className="text-xs text-gray-400 px-3 py-2 cursor-pointer hover:bg-black/40 hover:text-indigo-300 flex items-center gap-2 select-none"
+                            onClick={() => setExpandedTasks(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                          >
+                            <ChevronDown className={`w-3 h-3 transition-transform ${expandedTasks[task.id] ? '' : '-rotate-90'}`} />
+                            {task.name}
+                          </div>
+                          {expandedTasks[task.id] && (
+                          <div className="grid gap-2 p-2 pt-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}>
                             {objectNodes.map(node => {
                               const imageUrl = node.data.image;
                               const isAlreadyImported = objectAssets.some(a => a.nodeId === node.id);
+                              const isSelected = selectedAsset?.node.id === node.id;
                               return (
                                 <button
                                   key={node.id}
-                                  onClick={() => handleImportObjectOrDecal(task, node)}
+                                  onClick={() => setSelectedAsset({task, node, importType: 'object', imageUrl: imageUrl || '', isAlreadyImported})}
                                   disabled={isLoading || !imageUrl}
                                   className={`aspect-square relative rounded-sm border transition-all flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${
+                                    isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50 scale-95' :
                                     isAlreadyImported 
                                       ? 'bg-emerald-900/30 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' 
                                       : 'bg-black/40 border-transparent hover:border-indigo-500/60 hover:bg-indigo-900/40'
@@ -628,12 +694,72 @@ export default function AssetManager({
                               );
                             })}
                           </div>
+                          )}
                         </div>
                       );
                     }
                   })}
                 </div>
-              ))}
+                );
+              })}
+            </div>
+            
+            {/* Preview Pane */}
+            <div className="w-72 bg-black/40 border-l border-[var(--color-blender-border)] flex flex-col shrink-0 overflow-y-auto">
+              {selectedAsset ? (
+                <div className="p-4 flex flex-col h-full">
+                  <h4 className="text-sm font-bold text-gray-300 mb-4 pb-2 border-b border-gray-700">Preview</h4>
+                  
+                  <div className="aspect-square w-full rounded-md border border-gray-700 bg-black/50 overflow-hidden mb-4 relative flex items-center justify-center p-2">
+                    {selectedAsset.imageUrl ? (
+                      <img src={selectedAsset.imageUrl} className="w-full h-full object-contain" alt="Selected Preview" />
+                    ) : (
+                      <div className="text-gray-500 text-xs">No Preview</div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-3 flex-1">
+                    <div>
+                      <div className="text-[10px] text-gray-500 uppercase font-semibold">Asset Name</div>
+                      <div className="text-sm text-gray-200 truncate" title={selectedAsset.node.data?.localPrompt || selectedAsset.node.id}>
+                        {selectedAsset.node.data?.localPrompt || selectedAsset.node.id}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 uppercase font-semibold">Source Task</div>
+                      <div className="text-sm text-gray-300 truncate" title={selectedAsset.task.name}>{selectedAsset.task.name}</div>
+                    </div>
+                    {selectedAsset.isAlreadyImported && (
+                      <div className="bg-emerald-900/30 border border-emerald-500/50 rounded p-2 text-xs text-emerald-300 mt-2 flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5" /> Already Imported
+                      </div>
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      if (selectedAsset.importType === 'ground' || selectedAsset.importType === 'ocean') {
+                        handleImportGroundOrOcean(selectedAsset.task, selectedAsset.importType, selectedAsset.node.id);
+                      } else {
+                        handleImportObjectOrDecal(selectedAsset.task, selectedAsset.node);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3 px-4 rounded-sm transition-colors flex justify-center items-center gap-2 mt-4 disabled:opacity-50"
+                  >
+                    {isLoading ? <span className="animate-pulse">Importing...</span> : <><Download className="w-4 h-4" /> Confirm Import</>}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center opacity-50">
+                  <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
+                    <Check className="w-8 h-8 text-gray-600" />
+                  </div>
+                  <p className="text-sm text-gray-400">Select an asset from the gallery to preview it here.</p>
+                </div>
+              )}
+            </div>
+            
             </div>
           </div>
         </div>

@@ -62,6 +62,25 @@ export const PathEditorOverlay = ({ anchors, closed, onChange, transform, isActi
   const commitChanges = useCallback(() => {
     onChange([...localAnchorsRef.current], localClosedRef.current);
   }, [onChange]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (selectedAnchorIndex !== null && localAnchorsRef.current.length > 0) {
+          const newAnchors = [...localAnchorsRef.current];
+          newAnchors.splice(selectedAnchorIndex, 1);
+          localAnchorsRef.current = newAnchors;
+          setSelectedAnchorIndex(null);
+          setRenderTrigger(prev => prev + 1);
+          onChange(newAnchors, localClosedRef.current); // commit immediately
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, selectedAnchorIndex, onChange]);
   
   if (!isActive) return null;
 
@@ -107,10 +126,44 @@ export const PathEditorOverlay = ({ anchors, closed, onChange, transform, isActi
                  strokeWidth={15 / transform.scaleX}
                  onMouseEnter={() => { document.body.style.cursor = 'crosshair'; }}
                  onMouseLeave={() => { document.body.style.cursor = 'default'; }}
+                 onMouseDown={(e) => { e.cancelBubble = true; }}
                  onClick={(e) => {
                     e.cancelBubble = true;
-                    // Future: Split bezier curve logic goes here!
-                    console.log(`Ready for point insertion on segment ${i}`);
+                    const la = [...localAnchorsRef.current];
+                    
+                    const p0 = current;
+                    const p1 = current.handleOut || current;
+                    const p2 = next.handleIn || next;
+                    const p3 = next;
+                    
+                    // De Casteljau's algorithm at t=0.5
+                    const q1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+                    const m = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+                    const r2 = { x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2 };
+                    
+                    const q2 = { x: (q1.x + m.x) / 2, y: (q1.y + m.y) / 2 };
+                    const r1 = { x: (m.x + r2.x) / 2, y: (m.y + r2.y) / 2 };
+                    
+                    const b = { x: (q2.x + r1.x) / 2, y: (q2.y + r1.y) / 2 };
+                    
+                    la[i] = { ...la[i], handleOut: q1 };
+                    
+                    const newPoint: AnchorPoint = {
+                      x: b.x, y: b.y, type: 'smooth',
+                      handleIn: q2,
+                      handleOut: r1
+                    };
+                    
+                    la.splice(i + 1, 0, newPoint);
+                    
+                    // 'next' point is now shifted by 1 index if it wasn't index 0
+                    const nextIndex = (i + 1) % localAnchorsRef.current.length === 0 ? 0 : i + 2;
+                    la[nextIndex] = { ...la[nextIndex], handleIn: r2 };
+                    
+                    localAnchorsRef.current = la;
+                    setSelectedAnchorIndex(i + 1);
+                    setRenderTrigger(prev => prev + 1);
+                    commitChanges();
                  }}
               />
            );
@@ -141,8 +194,10 @@ export const PathEditorOverlay = ({ anchors, closed, onChange, transform, isActi
                  stroke="#71717a"
                  strokeWidth={1 / transform.scaleX}
                  draggable
+                 onMouseDown={(e) => { e.cancelBubble = true; }}
                  onDragMove={(e: any) => {
                    const la = [...localAnchorsRef.current];
+                   if (e.evt.altKey) la[i].type = 'asymmetric';
                    la[i] = { ...la[i], handleIn: { x: e.target.x(), y: e.target.y() } };
                    if (la[i].type === 'smooth' && la[i].handleOut) {
                       // Mirror handleOut
@@ -167,8 +222,10 @@ export const PathEditorOverlay = ({ anchors, closed, onChange, transform, isActi
                  stroke="#71717a"
                  strokeWidth={1 / transform.scaleX}
                  draggable
+                 onMouseDown={(e) => { e.cancelBubble = true; }}
                  onDragMove={(e: any) => {
                    const la = [...localAnchorsRef.current];
+                   if (e.evt.altKey) la[i].type = 'asymmetric';
                    la[i] = { ...la[i], handleOut: { x: e.target.x(), y: e.target.y() } };
                    if (la[i].type === 'smooth' && la[i].handleIn) {
                       // Mirror handleIn
@@ -192,14 +249,50 @@ export const PathEditorOverlay = ({ anchors, closed, onChange, transform, isActi
                stroke={isEditingMask ? "#10b981" : "#3b82f6"}
                strokeWidth={2 / transform.scaleX}
                draggable
+               onMouseDown={(e) => { e.cancelBubble = true; }}
                onClick={(e) => { e.cancelBubble = true; setSelectedAnchorIndex(i); }}
-               onDragMove={(e: any) => {
-                 const dx = e.target.x() - anchor.x;
-                 const dy = e.target.y() - anchor.y;
+               onDblClick={(e) => {
+                 e.cancelBubble = true;
                  const la = [...localAnchorsRef.current];
-                 la[i] = { ...la[i], x: e.target.x(), y: e.target.y() };
-                 if (la[i].handleIn) la[i].handleIn = { x: la[i].handleIn!.x + dx, y: la[i].handleIn!.y + dy };
-                 if (la[i].handleOut) la[i].handleOut = { x: la[i].handleOut!.x + dx, y: la[i].handleOut!.y + dy };
+                 if (la[i].type === 'smooth' || la[i].type === 'asymmetric') {
+                   la[i] = { ...la[i], type: 'sharp', handleIn: undefined, handleOut: undefined };
+                 } else {
+                   la[i] = { 
+                     ...la[i], 
+                     type: 'smooth', 
+                     handleIn: { x: la[i].x - 20, y: la[i].y },
+                     handleOut: { x: la[i].x + 20, y: la[i].y }
+                   };
+                 }
+                 localAnchorsRef.current = la;
+                 setRenderTrigger(prev => prev + 1);
+                 commitChanges();
+               }}
+               onDragMove={(e: any) => {
+                 const la = [...localAnchorsRef.current];
+                 if (e.evt.altKey) {
+                   la[i] = { 
+                     ...la[i], 
+                     x: anchor.x,
+                     y: anchor.y, 
+                     handleOut: { x: e.target.x(), y: e.target.y() },
+                     handleIn: la[i].type === 'smooth' ? { x: anchor.x - (e.target.x() - anchor.x), y: anchor.y - (e.target.y() - anchor.y) } : la[i].handleIn
+                   };
+                   if (!la[i].handleIn) {
+                     la[i].handleIn = { x: anchor.x - (e.target.x() - anchor.x), y: anchor.y - (e.target.y() - anchor.y) };
+                     la[i].type = 'smooth';
+                   } else if (la[i].type === 'sharp') {
+                     la[i].type = 'asymmetric';
+                   }
+                   e.target.x(anchor.x);
+                   e.target.y(anchor.y);
+                 } else {
+                   const dx = e.target.x() - anchor.x;
+                   const dy = e.target.y() - anchor.y;
+                   la[i] = { ...la[i], x: e.target.x(), y: e.target.y() };
+                   if (la[i].handleIn) la[i].handleIn = { x: la[i].handleIn!.x + dx, y: la[i].handleIn!.y + dy };
+                   if (la[i].handleOut) la[i].handleOut = { x: la[i].handleOut!.x + dx, y: la[i].handleOut!.y + dy };
+                 }
                  localAnchorsRef.current = la;
                  setRenderTrigger(prev => prev + 1);
                }}

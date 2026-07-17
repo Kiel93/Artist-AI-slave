@@ -282,7 +282,7 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
           copiedNodesRef.current = selectedNodes;
           const selectedNodeIds = new Set(selectedNodes.map(n => n.id));
           const selectedEdges = edgesRef.current.filter(edge =>
-            selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
+            selectedNodeIds.has(edge.target) // Include internal and external incoming edges
           );
           copiedEdgesRef.current = selectedEdges;
           
@@ -403,13 +403,21 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
           return n;
         });
 
-        const newEdges = (pastedEdges || []).map((edge: Edge) => ({
-          ...edge,
-          id: `e-${getId()}`,
-          source: idMapping.get(edge.source) || edge.source,
-          target: idMapping.get(edge.target) || edge.target,
-          selected: true,
-        }));
+        const currentNodes = nodesRef.current;
+        const validNodeIds = new Set([
+          ...currentNodes.map((n: Node) => n.id),
+          ...finalizedNewNodes.map((n: Node) => n.id)
+        ]);
+
+        const newEdges = (pastedEdges || [])
+          .map((edge: Edge) => ({
+            ...edge,
+            id: `e-${getId()}`,
+            source: idMapping.get(edge.source) || edge.source,
+            target: idMapping.get(edge.target) || edge.target,
+            selected: true,
+          }))
+          .filter((edge: Edge) => validNodeIds.has(edge.source) && validNodeIds.has(edge.target));
 
         setNodes((nds) => {
           const unselected = nds.map(node => ({ ...node, selected: false }));

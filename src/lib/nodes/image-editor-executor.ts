@@ -87,10 +87,22 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
           if (a.handleIn) { const thi = transformPoint(a.handleIn.x, a.handleIn.y); updateBounds(thi.x, thi.y); }
           if (a.handleOut) { const tho = transformPoint(a.handleOut.x, a.handleOut.y); updateBounds(tho.x, tho.y); }
        });
-    } else if (layer.type === 'brush' && layer.points) {
-       for (let i = 0; i < layer.points.length; i += 2) {
-          const tp = transformPoint(layer.points[i], layer.points[i+1]);
-          updateBounds(tp.x, tp.y);
+    } else if (layer.type === 'brush') {
+       if (layer.points) {
+         for (let i = 0; i < layer.points.length; i += 2) {
+            const tp = transformPoint(layer.points[i], layer.points[i+1]);
+            updateBounds(tp.x, tp.y);
+         }
+       }
+       if (layer.lines) {
+         layer.lines.forEach((line: any) => {
+           if (line.points) {
+             for (let i = 0; i < line.points.length; i += 2) {
+                const tp = transformPoint(line.points[i], line.points[i+1]);
+                updateBounds(tp.x, tp.y);
+             }
+           }
+         });
        }
     } else {
        let bw = w, bh = h;
@@ -297,18 +309,45 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
           ctx.lineWidth = layer.strokeWidth;
           ctx.stroke();
         }
-      } else if (layer.type === 'brush' && layer.points && layer.points.length > 0) {
-        ctx.beginPath();
-        const pts = layer.points;
-        ctx.moveTo(pts[0], pts[1]);
-        for (let i = 2; i < pts.length; i += 2) {
-          ctx.lineTo(pts[i], pts[i + 1]);
+      } else if (layer.type === 'brush') {
+        const baseAlpha = layer.opacity !== undefined ? layer.opacity : 1;
+        
+        if (layer.points && layer.points.length > 0) {
+          ctx.beginPath();
+          const pts = layer.points;
+          ctx.moveTo(pts[0], pts[1]);
+          for (let i = 2; i < pts.length; i += 2) {
+            ctx.lineTo(pts[i], pts[i + 1]);
+          }
+          ctx.strokeStyle = layer.stroke || '#ffffff';
+          ctx.lineWidth = layer.strokeWidth || 5;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
         }
-        ctx.strokeStyle = layer.stroke || '#ffffff';
-        ctx.lineWidth = layer.strokeWidth || 5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
+        
+        if (layer.lines && layer.lines.length > 0) {
+          layer.lines.forEach((line: any) => {
+            if (line.points && line.points.length > 0) {
+              ctx.beginPath();
+              ctx.moveTo(line.points[0], line.points[1]);
+              if (line.points.length === 2) {
+                 ctx.lineTo(line.points[0] + 0.1, line.points[1] + 0.1);
+              } else {
+                 for (let i = 2; i < line.points.length; i += 2) {
+                   ctx.lineTo(line.points[i], line.points[i + 1]);
+                 }
+              }
+              ctx.strokeStyle = layer.stroke || '#ffffff';
+              ctx.lineWidth = line.size || layer.strokeWidth || 5;
+              ctx.globalAlpha = baseAlpha * (line.opacity !== undefined ? line.opacity / 100 : 1);
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.stroke();
+            }
+          });
+          ctx.globalAlpha = baseAlpha; // reset
+        }
       } else if (img) {
         if (layer.filters) {
           const filterTokens = [];
@@ -332,8 +371,68 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
           }
         }
         
-        // Draw image at the local origin (0, 0) since we already translated by -offsetX, -offsetY
-        ctx.drawImage(img, 0, 0, width, height);
+        if (layer.rasterMask && layer.rasterMask.visible !== false) {
+          // Use offscreen canvas to apply mask correctly without erasing background
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = width;
+          tempCanvas.height = height;
+          const tempCtx = tempCanvas.getContext("2d");
+          if (tempCtx) {
+            if (ctx.filter && ctx.filter !== 'none') {
+              tempCtx.filter = ctx.filter;
+              ctx.filter = 'none'; // clear from main ctx
+            }
+            tempCtx.drawImage(img, 0, 0, width, height);
+            tempCtx.filter = 'none';
+            
+            const maskCanvas = document.createElement("canvas");
+            maskCanvas.width = width;
+            maskCanvas.height = height;
+            const maskCtx = maskCanvas.getContext("2d");
+            
+            if (maskCtx) {
+              maskCtx.globalCompositeOperation = 'source-over';
+              if (layer.rasterMask.inverted) {
+                maskCtx.clearRect(0, 0, width, height);
+              } else {
+                maskCtx.fillStyle = '#FFFFFF';
+                maskCtx.fillRect(0, 0, width, height);
+              }
+
+              if (layer.rasterMask.lines) {
+                layer.rasterMask.lines.forEach((l: any) => {
+                  maskCtx.globalCompositeOperation = l.mode === 'erase' ? 'destination-out' : 'source-over';
+                  maskCtx.strokeStyle = '#FFFFFF';
+                  maskCtx.lineWidth = l.size || 20;
+                  maskCtx.lineCap = 'round';
+                  maskCtx.lineJoin = 'round';
+                  maskCtx.globalAlpha = l.opacity !== undefined ? l.opacity / 100 : 1.0;
+
+                  if (l.points && l.points.length >= 2) {
+                    maskCtx.beginPath();
+                    maskCtx.moveTo(l.points[0], l.points[1]);
+                    if (l.points.length === 2) {
+                      maskCtx.lineTo(l.points[0] + 0.1, l.points[1] + 0.1);
+                    } else {
+                      for (let i = 2; i < l.points.length; i += 2) {
+                        maskCtx.lineTo(l.points[i], l.points[i + 1]);
+                      }
+                    }
+                    maskCtx.stroke();
+                  }
+                });
+              }
+
+              tempCtx.globalCompositeOperation = layer.rasterMask.inverted ? "destination-out" : "destination-in";
+              tempCtx.globalAlpha = 1.0;
+              tempCtx.drawImage(maskCanvas, 0, 0);
+            }
+            ctx.drawImage(tempCanvas, 0, 0, width, height);
+          }
+        } else {
+          // Draw image at the local origin (0, 0) since we already translated by -offsetX, -offsetY
+          ctx.drawImage(img, 0, 0, width, height);
+        }
         
         ctx.filter = 'none';
       }

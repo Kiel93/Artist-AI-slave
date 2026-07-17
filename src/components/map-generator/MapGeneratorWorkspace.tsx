@@ -412,6 +412,7 @@ export default function MapGeneratorWorkspace({ taskId, isActive = true }: { tas
           replaceAssetId={replaceAssetId}
           setReplaceAssetId={setReplaceAssetId}
           objectStats={objectStats}
+          currentTaskId={taskId}
         />
       </div>
 
