@@ -159,69 +159,192 @@ interface WorkspaceProps {
 
 type ToolMode = "select" | "pan" | "zoom" | "brush" | "marquee" | "lasso" | "pen";
 const RasterMaskRenderer = ({ mask, width, height }: any) => {
-  const [canvas] = useState(() => document.createElement('canvas'));
-  const [revision, setRevision] = useState(0);
+  const imageRef = React.useRef<any>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const canvasWidth = width || 2048;
+  const canvasHeight = height || 2048;
+  const minX = width ? 0 : -1024;
+  const minY = height ? 0 : -1024;
 
-  useEffect(() => {
-    if (!width || !height) return;
-    
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  React.useEffect(() => {
+    if (!mask || mask.visible === false) return;
 
-    // Fill background
-    ctx.globalCompositeOperation = 'source-over';
-    if (mask.inverted) {
-      ctx.clearRect(0, 0, width, height);
-    } else {
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, width, height);
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement("canvas");
+    }
+    const maskCanvas = canvasRef.current;
+    if (maskCanvas.width !== canvasWidth) maskCanvas.width = canvasWidth;
+    if (maskCanvas.height !== canvasHeight) maskCanvas.height = canvasHeight;
+
+    const shapeCanvas = document.createElement("canvas");
+    shapeCanvas.width = canvasWidth;
+    shapeCanvas.height = canvasHeight;
+    const shapeCtx = shapeCanvas.getContext("2d");
+    if (!shapeCtx) return;
+
+    shapeCtx.translate(-minX, -minY);
+
+    if (!mask.inverted) {
+      shapeCtx.fillStyle = '#FFFFFF';
+      shapeCtx.fillRect(minX - 100, minY - 100, canvasWidth + 200, canvasHeight + 200);
     }
 
-    // Draw all strokes
     if (mask.lines) {
       mask.lines.forEach((l: any) => {
-        ctx.globalCompositeOperation = l.mode === 'erase' ? 'destination-out' : 'source-over';
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = l.size || 20;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        if (l.opacity !== undefined) {
-          ctx.globalAlpha = l.opacity / 100;
-        } else {
-          ctx.globalAlpha = 1.0;
-        }
+        shapeCtx.globalCompositeOperation = l.mode === 'erase' ? 'destination-out' : 'source-over';
+        shapeCtx.strokeStyle = '#FFFFFF';
+        shapeCtx.lineWidth = l.size || 20;
+        shapeCtx.lineCap = 'round';
+        shapeCtx.lineJoin = 'round';
+        shapeCtx.globalAlpha = l.opacity !== undefined ? l.opacity / 100 : 1.0;
 
         if (l.points && l.points.length >= 2) {
-          ctx.beginPath();
-          ctx.moveTo(l.points[0], l.points[1]);
-          // For a single point click (2 coords), draw a tiny line to make it visible
+          shapeCtx.beginPath();
+          shapeCtx.moveTo(l.points[0], l.points[1]);
           if (l.points.length === 2) {
-            ctx.lineTo(l.points[0] + 0.1, l.points[1] + 0.1);
+            shapeCtx.lineTo(l.points[0] + 0.1, l.points[1] + 0.1);
           } else {
             for (let i = 2; i < l.points.length; i += 2) {
-              ctx.lineTo(l.points[i], l.points[i + 1]);
+              shapeCtx.lineTo(l.points[i], l.points[i + 1]);
             }
           }
-          ctx.stroke();
+          shapeCtx.stroke();
         }
       });
     }
 
-    // Trigger a KonvaImage re-render
-    setRevision(r => r + 1);
-  }, [mask.lines, mask.inverted, width, height, canvas]);
+    const maskCtx = maskCanvas.getContext("2d");
+    if (!maskCtx) return;
+    
+    maskCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    if (mask.feather && mask.feather > 0) {
+      maskCtx.filter = `blur(${mask.feather}px)`;
+    }
+    maskCtx.drawImage(shapeCanvas, 0, 0);
+    maskCtx.filter = 'none';
+
+    const density = mask.density !== undefined ? mask.density : 100;
+    maskCtx.globalCompositeOperation = 'destination-over';
+    maskCtx.fillStyle = `rgba(255, 255, 255, ${(100 - density) / 100})`;
+    maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // Force Konva redraw since we mutated the canvas pixels
+    if (imageRef.current) {
+      const layer = imageRef.current.getLayer();
+      if (layer) layer.batchDraw();
+    }
+  }, [mask.lines, mask.inverted, mask.density, mask.feather, canvasWidth, canvasHeight, minX, minY]);
+
+  if (!canvasRef.current || mask.visible === false) return null;
 
   return (
-    <KonvaImage 
-      image={canvas} 
-      globalCompositeOperation={mask.inverted ? "destination-out" : "destination-in"} 
+    <KonvaImage
+      ref={imageRef}
+      image={canvasRef.current}
+      x={minX}
+      y={minY}
+      globalCompositeOperation="destination-in"
       listening={false}
     />
   );
 };
+
+const VectorMaskRenderer = ({ mask, width, height }: any) => {
+  const imageRef = React.useRef<any>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const canvasWidth = width || 2048;
+  const canvasHeight = height || 2048;
+  const minX = width ? 0 : -1024;
+  const minY = height ? 0 : -1024;
+
+  React.useEffect(() => {
+    if (!mask || mask.visible === false || !mask.pathAnchors || mask.pathAnchors.length < 3) return;
+
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement("canvas");
+    }
+    const maskCanvas = canvasRef.current;
+    if (maskCanvas.width !== canvasWidth) maskCanvas.width = canvasWidth;
+    if (maskCanvas.height !== canvasHeight) maskCanvas.height = canvasHeight;
+
+    const shapeCanvas = document.createElement("canvas");
+    shapeCanvas.width = canvasWidth;
+    shapeCanvas.height = canvasHeight;
+    const shapeCtx = shapeCanvas.getContext("2d");
+    if (!shapeCtx) return;
+
+    shapeCtx.translate(-minX, -minY);
+    shapeCtx.fillStyle = '#FFFFFF';
+    shapeCtx.beginPath();
+    shapeCtx.moveTo(mask.pathAnchors[0].x, mask.pathAnchors[0].y);
+    for (let i = 0; i < mask.pathAnchors.length; i++) {
+        const current = mask.pathAnchors[i];
+        const next = mask.pathAnchors[(i + 1) % mask.pathAnchors.length];
+        if (!mask.pathClosed && i === mask.pathAnchors.length - 1) break;
+        const cp1x = current.handleOut ? current.handleOut.x : current.x;
+        const cp1y = current.handleOut ? current.handleOut.y : current.y;
+        const cp2x = next.handleIn ? next.handleIn.x : next.x;
+        const cp2y = next.handleIn ? next.handleIn.y : next.y;
+        shapeCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+    }
+    if (mask.pathClosed) shapeCtx.closePath();
+    shapeCtx.fill();
+
+    if (mask.inverted) {
+        const invCanvas = document.createElement("canvas");
+        invCanvas.width = canvasWidth;
+        invCanvas.height = canvasHeight;
+        const invCtx = invCanvas.getContext("2d");
+        if (invCtx) {
+           invCtx.fillStyle = '#FFFFFF';
+           invCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+           invCtx.globalCompositeOperation = 'destination-out';
+           invCtx.drawImage(shapeCanvas, 0, 0);
+           
+           shapeCtx.setTransform(1, 0, 0, 1, 0, 0);
+           shapeCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+           shapeCtx.globalCompositeOperation = 'source-over';
+           shapeCtx.drawImage(invCanvas, 0, 0);
+        }
+    }
+
+    const maskCtx = maskCanvas.getContext("2d");
+    if (!maskCtx) return;
+    
+    maskCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    if (mask.feather && mask.feather > 0) {
+      maskCtx.filter = `blur(${mask.feather}px)`;
+    }
+    maskCtx.drawImage(shapeCanvas, 0, 0);
+    maskCtx.filter = 'none';
+
+    const density = mask.density !== undefined ? mask.density : 100;
+    maskCtx.globalCompositeOperation = 'destination-over';
+    maskCtx.fillStyle = `rgba(255, 255, 255, ${(100 - density) / 100})`;
+    maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    if (imageRef.current) {
+      const layer = imageRef.current.getLayer();
+      if (layer) layer.batchDraw();
+    }
+  }, [mask.pathAnchors, mask.pathClosed, mask.inverted, mask.density, mask.feather, canvasWidth, canvasHeight, minX, minY]);
+
+  if (!canvasRef.current || mask.visible === false) return null;
+
+  return (
+    <KonvaImage
+      ref={imageRef}
+      image={canvasRef.current}
+      x={minX}
+      y={minY}
+      globalCompositeOperation="destination-in"
+      listening={false}
+    />
+  );
+};
+
 const URLImage = ({ layer, url, isSelected, onSelect, onChange, width, height, isInteractive }: any) => {
   const [image] = useImage(url, 'anonymous');
   const shapeRef = useRef<any>(null);
@@ -320,6 +443,9 @@ const URLImage = ({ layer, url, isSelected, onSelect, onChange, width, height, i
           />
           {layer.rasterMask && layer.rasterMask.visible !== false && (
             <RasterMaskRenderer mask={layer.rasterMask} width={width} height={height} />
+          )}
+          {layer.vectorMask && layer.vectorMask.visible !== false && layer.vectorMask.pathAnchors && layer.vectorMask.pathAnchors.length >= 3 && (
+            <VectorMaskRenderer mask={layer.vectorMask} width={width} height={height} />
           )}
         </Group>
       </Group>
@@ -849,25 +975,37 @@ function InspectorPanel({ layer, image, onChange }: { layer: LayerData, image: a
                      + Add Raster Mask
                    </button>
                 ) : (
-                   <div className="flex gap-2">
-                     <button 
-                       onClick={() => onChange({ rasterMask: undefined, activeEditingTarget: 'image' })}
-                       className="flex-1 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded py-1 text-[10px] font-bold transition-colors"
-                     >
-                       Remove
-                     </button>
-                     <button 
-                       onClick={() => onChange({ rasterMask: { ...layer.rasterMask!, inverted: !layer.rasterMask!.inverted } })}
-                       className={`flex-1 border rounded py-1 text-[10px] font-bold transition-colors ${layer.rasterMask?.inverted ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 text-gray-300 border-white/10'}`}
-                     >
-                       {layer.rasterMask?.inverted ? 'Inverted' : 'Invert'}
-                     </button>
-                     <button 
-                       onClick={() => onChange({ rasterMask: { ...layer.rasterMask!, visible: !layer.rasterMask!.visible } })}
-                       className="flex-1 bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 rounded py-1 text-[10px] font-bold transition-colors"
-                     >
-                       {layer.rasterMask?.visible ? 'Hide' : 'Show'}
-                     </button>
+                   <div className="flex flex-col gap-3">
+                     <div className="flex gap-2">
+                       <button 
+                         onClick={() => onChange({ rasterMask: undefined, activeEditingTarget: 'image' })}
+                         className="flex-1 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded py-1 text-[10px] font-bold transition-colors"
+                       >
+                         Remove
+                       </button>
+                       <button 
+                         onClick={() => onChange({ rasterMask: { ...layer.rasterMask!, inverted: !layer.rasterMask!.inverted } })}
+                         className={`flex-1 border rounded py-1 text-[10px] font-bold transition-colors ${layer.rasterMask?.inverted ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 text-gray-300 border-white/10'}`}
+                       >
+                         {layer.rasterMask?.inverted ? 'Inverted' : 'Invert'}
+                       </button>
+                       <button 
+                         onClick={() => onChange({ rasterMask: { ...layer.rasterMask!, visible: !layer.rasterMask!.visible } })}
+                         className="flex-1 bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 rounded py-1 text-[10px] font-bold transition-colors"
+                       >
+                         {layer.rasterMask?.visible ? 'Hide' : 'Show'}
+                       </button>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-gray-500 uppercase w-12">Density</label>
+                        <input type="range" min="0" max="100" value={layer.rasterMask?.density ?? 100} onChange={(e) => onChange({ rasterMask: { ...layer.rasterMask!, density: Number(e.target.value) } })} className="flex-1 accent-emerald-500 h-1" />
+                        <span className="text-[10px] text-gray-400 w-6 text-right">{layer.rasterMask?.density ?? 100}%</span>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-gray-500 uppercase w-12">Feather</label>
+                        <input type="range" min="0" max="50" value={layer.rasterMask?.feather ?? 0} onChange={(e) => onChange({ rasterMask: { ...layer.rasterMask!, feather: Number(e.target.value) } })} className="flex-1 accent-emerald-500 h-1" />
+                        <span className="text-[10px] text-gray-400 w-6 text-right">{layer.rasterMask?.feather ?? 0}px</span>
+                     </div>
                    </div>
                 )}
               </div>
@@ -918,6 +1056,7 @@ function InspectorPanel({ layer, image, onChange }: { layer: LayerData, image: a
 export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, onExit }: WorkspaceProps) {
   const node = nodes.find(n => n.id === nodeId);
   const containerRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
   
   const [layers, setLayers] = useState<LayerData[]>([]);
   
@@ -944,6 +1083,16 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
   const [dropPosition, setDropPosition] = useState<'top' | 'bottom' | null>(null);
   
   const [toolMode, setToolMode] = useState<ToolMode>("select");
+
+  useEffect(() => {
+    if (containerRef.current) {
+       const stageContainer = containerRef.current.querySelector('.konvajs-content') as HTMLElement;
+       if (stageContainer) {
+          stageContainer.style.cursor = toolMode === 'brush' ? 'none' : 'default';
+       }
+    }
+  }, [toolMode]);
+
   const [brushSettings, setBrushSettings] = useState({ size: 20, opacity: 100, hardness: 100 });
   const [viewport, setViewport] = useState({ panX: 0, panY: 0, zoom: 1 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -1143,8 +1292,10 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
       }
       
       if (key === 'v') setToolMode("select");
-      if (key === 'h') setToolMode("pan");
-      if (key === 'z') setToolMode("zoom");
+      if (key === 'm') setToolMode("marquee");
+      if (key === 'l') setToolMode("lasso");
+      if (key === 'b') setToolMode("brush");
+      if (key === 'p') setToolMode("pen");
     };
     
     window.addEventListener('keydown', handleKeyDown);
@@ -1404,9 +1555,26 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
         {/* Central Canvas */}
         <div 
           className="flex-1 relative overflow-hidden"
-          style={{ backgroundImage: `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`, backgroundSize: '32px 32px' }}
+          style={{ 
+            backgroundImage: `repeating-conic-gradient(#1a1525 0% 25%, #2a2438 0% 50%)`, 
+            backgroundSize: '32px 32px',
+            cursor: toolMode === 'brush' ? 'none' : undefined
+          }}
           ref={containerRef}
+          onPointerMove={(e) => {
+             if (cursorRef.current && toolMode === 'brush') {
+                const size = brushSettings.size * viewport.zoom;
+                cursorRef.current.style.display = 'block';
+                cursorRef.current.style.width = `${size}px`;
+                cursorRef.current.style.height = `${size}px`;
+                cursorRef.current.style.transform = `translate(${e.clientX}px, ${e.clientY}px) translate(-50%, -50%)`;
+             }
+          }}
+          onPointerLeave={() => {
+             if (cursorRef.current) cursorRef.current.style.display = 'none';
+          }}
         >
+          <div ref={cursorRef} className="fixed top-0 left-0 pointer-events-none border border-white rounded-full mix-blend-difference z-[100]" style={{ display: 'none' }} />
           {dimensions.width > 0 && (
             <Stage 
                width={dimensions.width} 
@@ -1944,12 +2112,47 @@ export default function ImageEditorWorkspace({ nodeId, nodes, edges, setNodes, o
             </Stage>
           )}
 
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs font-mono text-gray-400 bg-black/60 px-4 py-2 rounded-full border border-white/10 backdrop-blur-sm pointer-events-none z-50">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-[10px] md:text-xs font-mono text-gray-400 bg-black/60 px-4 py-2 rounded-2xl border border-white/10 backdrop-blur-sm pointer-events-none z-50 max-w-[90%]">
              <span>Zoom: {Math.round(viewport.zoom * 100)}%</span>
-             <span className="w-px h-4 bg-white/20" />
-             <span><span className="text-white font-bold">V</span> Select</span>
-             <span><span className="text-white font-bold text-[10px] border border-white/20 rounded px-1 mr-1">CTRL</span>+ Wheel Zoom</span>
-             <span><span className="text-white font-bold text-[10px] border border-white/20 rounded px-1 mr-1">MMB</span> Pan</span>
+             <span className="hidden md:block w-px h-4 bg-white/20" />
+             {toolMode === "select" && (
+                <>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">MMB</span> Pan</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">CTRL</span>+ Wheel Zoom</span>
+                  <span><span className="text-white font-bold">V</span> Select</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">Left Drag</span> Move/Transform</span>
+                </>
+             )}
+             {toolMode === "marquee" && (
+                <>
+                  <span><span className="text-white font-bold">M</span> Marquee</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">Left Drag</span> Select Region</span>
+                </>
+             )}
+             {toolMode === "lasso" && (
+                <>
+                  <span><span className="text-white font-bold">L</span> Lasso</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">Left Drag</span> Draw Freehand</span>
+                </>
+             )}
+             {toolMode === "brush" && (
+                <>
+                  <span><span className="text-white font-bold">B</span> Brush</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">Left Click</span> Paint</span>
+                </>
+             )}
+             {toolMode === "pen" && (
+                <>
+                  <span><span className="text-white font-bold">P</span> Pen</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">Click</span> Add/Move Point</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">Double Click Line</span> Insert Point</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">ALT + Drag Handle</span> Break Symmetry</span>
+                  <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">DEL/Backspace</span> Delete Point</span>
+                </>
+             )}
+             {(toolMode === "pan" || toolMode === "zoom") && (
+                <span><span className="text-white font-bold px-1 border border-white/20 rounded mr-1">V</span> to Select Mode</span>
+             )}
           </div>
 
           {/* Transform Panel (Removed - Replaced by left Inspector Panel) */}

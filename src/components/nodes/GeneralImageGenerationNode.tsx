@@ -21,7 +21,7 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "succeeded" | "failed">("idle");
   const [image, setImage] = useState<string | null>(data.image || null);
   const [error, setError] = useState<string | null>(null);
-  const [lastRunHash, setLastRunHash] = useState<string>(data.lastRunHash || "");
+
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [localPrompt, setLocalPrompt] = useState<string>(data.localPrompt || "");
@@ -89,13 +89,6 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
     });
 
     const finalPrompt = hasTextConnectionGen ? incomingTextInput : localPrompt;
-    const currentHash = JSON.stringify({ prompt: finalPrompt, images: imageInputsGen, model: selectedModel });
-
-    // 2. Change Detection
-    if (status === 'succeeded' && currentHash === lastRunHash && image) {
-      console.log("No changes detected, skipping API call.");
-      return;
-    }
 
     // 3. API Call
     const apiKey = localStorage.getItem("artist-assistant-image-api");
@@ -125,10 +118,9 @@ export default function GeneralImageGenerationNode({ id, data, selected }: { id:
       if (result.success && result.data?.image) {
         setImage(result.data.image);
         setStatus("succeeded");
-        setLastRunHash(currentHash);
         setNodes(nds => nds.map(n => n.id === id ? { 
           ...n, 
-          data: { ...n.data, image: result.data.image, lastRunHash: currentHash } 
+          data: { ...n.data, image: result.data.image } 
         } : n));
       } else {
         setError(result.error || "Generation failed on server.");

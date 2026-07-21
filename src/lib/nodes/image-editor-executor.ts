@@ -162,52 +162,41 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
     drawableLayers.sort((a, b) => a.layer.zIndex - b.layer.zIndex);
 
     for (const { layer, img, width, height } of drawableLayers) {
-      ctx.save();
+      const layerCanvas = document.createElement("canvas");
+      layerCanvas.width = canvasWidth;
+      layerCanvas.height = canvasHeight;
+      const layerCtx = layerCanvas.getContext("2d");
+      if (!layerCtx) continue;
+
+      layerCtx.save();
       
       const centerX = -globalMinX + (layer.x || 0);
       const centerY = -globalMinY + (layer.y || 0);
-
       
-      ctx.translate(centerX, centerY);
+      layerCtx.translate(centerX, centerY);
       if (layer.rotation) {
-        ctx.rotate((layer.rotation * Math.PI) / 180);
+        layerCtx.rotate((layer.rotation * Math.PI) / 180);
       }
       
       const scaleX = layer.scaleX !== undefined ? layer.scaleX : (layer.scale !== undefined ? layer.scale : 1);
       const scaleY = layer.scaleY !== undefined ? layer.scaleY : (layer.scale !== undefined ? layer.scale : 1);
       if (scaleX !== 1 || scaleY !== 1) {
-        ctx.scale(scaleX, scaleY);
+        layerCtx.scale(scaleX, scaleY);
       }
       
       const isImageLayer = layer.type === 'image' || !!img;
       const offsetX = isImageLayer ? width / 2 : 0;
       const offsetY = isImageLayer ? height / 2 : 0;
       
-      // Translate to the layer's local coordinate origin (top-left for images, center for shapes)
-      ctx.translate(-offsetX, -offsetY);
+      layerCtx.translate(-offsetX, -offsetY);
 
-      if (layer.opacity !== undefined) {
-        ctx.globalAlpha = layer.opacity;
-      }
-
-      if (layer.blendMode) {
-        ctx.globalCompositeOperation = layer.blendMode;
-      }
-
-      if (layer.shadowColor) {
-        ctx.shadowColor = layer.shadowColor;
-        ctx.shadowBlur = layer.shadowBlur || 0;
-        ctx.shadowOffsetX = layer.shadowOffsetX || 0;
-        ctx.shadowOffsetY = layer.shadowOffsetY || 0;
-      }
-      
       if (layer.mask) {
-         ctx.beginPath();
+         layerCtx.beginPath();
          let isCCW = false;
          
          if (layer.mask.type === 'path' && layer.mask.pathAnchors && layer.mask.pathAnchors.length > 0) {
              const anchors = layer.mask.pathAnchors;
-             ctx.moveTo(anchors[0].x, anchors[0].y);
+             layerCtx.moveTo(anchors[0].x, anchors[0].y);
              for (let i = 0; i < anchors.length; i++) {
                  const current = anchors[i];
                  const next = anchors[(i + 1) % anchors.length];
@@ -218,11 +207,10 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
                  const cp2x = next.handleIn ? next.handleIn.x : next.x;
                  const cp2y = next.handleIn ? next.handleIn.y : next.y;
                  
-                 ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+                 layerCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
              }
-             if (layer.mask.pathClosed) ctx.closePath();
+             if (layer.mask.pathClosed) layerCtx.closePath();
              
-             // Check winding order
              let sum = 0;
              for (let i = 0; i < anchors.length; i++) {
                  const current = anchors[i];
@@ -233,11 +221,11 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
              
          } else if (layer.mask.points && layer.mask.points.length > 0) {
              const pts = layer.mask.points;
-             ctx.moveTo(pts[0], pts[1]);
+             layerCtx.moveTo(pts[0], pts[1]);
              for (let i = 2; i < pts.length; i += 2) {
-                 ctx.lineTo(pts[i], pts[i+1]);
+                 layerCtx.lineTo(pts[i], pts[i+1]);
              }
-             ctx.closePath();
+             layerCtx.closePath();
              
              let sum = 0;
              for (let i = 0; i < pts.length; i += 2) {
@@ -250,27 +238,27 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
 
          if (layer.mask.inverted) {
              if (isCCW) {
-                 ctx.rect(-canvasWidth*2, -canvasHeight*2, canvasWidth * 4, canvasHeight * 4);
+                 layerCtx.rect(-canvasWidth*2, -canvasHeight*2, canvasWidth * 4, canvasHeight * 4);
              } else {
-                 ctx.rect(canvasWidth*2, -canvasHeight*2, -canvasWidth * 4, canvasHeight * 4);
+                 layerCtx.rect(canvasWidth*2, -canvasHeight*2, -canvasWidth * 4, canvasHeight * 4);
              }
          }
-         ctx.clip();
+         layerCtx.clip();
       }
-      
+
       if (layer.type === 'text') {
-        ctx.font = `${layer.fontSize || 32}px ${layer.fontFamily || 'Arial'}`;
-        ctx.fillStyle = layer.fill || '#ffffff';
-        ctx.textBaseline = 'top';
-        ctx.fillText(layer.text || "Double click to edit", 0, 0);
+        layerCtx.font = `${layer.fontSize || 32}px ${layer.fontFamily || 'Arial'}`;
+        layerCtx.fillStyle = layer.fill || '#ffffff';
+        layerCtx.textBaseline = 'top';
+        layerCtx.fillText(layer.text || "Double click to edit", 0, 0);
       } else if (layer.type === 'shape') {
-        ctx.beginPath();
+        layerCtx.beginPath();
         if (layer.shapeType === 'rect') {
           const w = layer.width || 100;
           const h = layer.height || 100;
-          ctx.rect(-w/2, -h/2, w, h);
+          layerCtx.rect(-w/2, -h/2, w, h);
         } else if (layer.shapeType === 'circle') {
-          ctx.arc(0, 0, layer.radius || 50, 0, Math.PI * 2);
+          layerCtx.arc(0, 0, layer.radius || 50, 0, Math.PI * 2);
         } else if (layer.shapeType === 'star') {
           const numPoints = layer.numPoints || 5;
           const innerRadius = layer.innerRadius || 25;
@@ -278,13 +266,13 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
           for (let i = 0; i < numPoints * 2; i++) {
             const r = i % 2 === 0 ? outerRadius : innerRadius;
             const a = (Math.PI * i) / numPoints - Math.PI / 2;
-            if (i === 0) ctx.moveTo(r * Math.cos(a), r * Math.sin(a));
-            else ctx.lineTo(r * Math.cos(a), r * Math.sin(a));
+            if (i === 0) layerCtx.moveTo(r * Math.cos(a), r * Math.sin(a));
+            else layerCtx.lineTo(r * Math.cos(a), r * Math.sin(a));
           }
-          ctx.closePath();
+          layerCtx.closePath();
         } else if (layer.shapeType === 'path' && layer.pathAnchors && layer.pathAnchors.length > 0) {
           const anchors = layer.pathAnchors;
-          ctx.moveTo(anchors[0].x, anchors[0].y);
+          layerCtx.moveTo(anchors[0].x, anchors[0].y);
           for (let i = 0; i < anchors.length; i++) {
               const current = anchors[i];
               const next = anchors[(i + 1) % anchors.length];
@@ -295,58 +283,56 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
               const cp2x = next.handleIn ? next.handleIn.x : next.x;
               const cp2y = next.handleIn ? next.handleIn.y : next.y;
               
-              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+              layerCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
           }
-          if (layer.pathClosed) ctx.closePath();
+          if (layer.pathClosed) layerCtx.closePath();
         }
         
         if (layer.fill) {
-          ctx.fillStyle = layer.fill;
-          ctx.fill();
+          layerCtx.fillStyle = layer.fill;
+          layerCtx.fill();
         }
         if (layer.strokeWidth && layer.strokeWidth > 0 && layer.stroke) {
-          ctx.strokeStyle = layer.stroke;
-          ctx.lineWidth = layer.strokeWidth;
-          ctx.stroke();
+          layerCtx.strokeStyle = layer.stroke;
+          layerCtx.lineWidth = layer.strokeWidth;
+          layerCtx.stroke();
         }
       } else if (layer.type === 'brush') {
-        const baseAlpha = layer.opacity !== undefined ? layer.opacity : 1;
-        
         if (layer.points && layer.points.length > 0) {
-          ctx.beginPath();
+          layerCtx.beginPath();
           const pts = layer.points;
-          ctx.moveTo(pts[0], pts[1]);
+          layerCtx.moveTo(pts[0], pts[1]);
           for (let i = 2; i < pts.length; i += 2) {
-            ctx.lineTo(pts[i], pts[i + 1]);
+            layerCtx.lineTo(pts[i], pts[i + 1]);
           }
-          ctx.strokeStyle = layer.stroke || '#ffffff';
-          ctx.lineWidth = layer.strokeWidth || 5;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.stroke();
+          layerCtx.strokeStyle = layer.stroke || '#ffffff';
+          layerCtx.lineWidth = layer.strokeWidth || 5;
+          layerCtx.lineCap = 'round';
+          layerCtx.lineJoin = 'round';
+          layerCtx.stroke();
         }
         
         if (layer.lines && layer.lines.length > 0) {
           layer.lines.forEach((line: any) => {
             if (line.points && line.points.length > 0) {
-              ctx.beginPath();
-              ctx.moveTo(line.points[0], line.points[1]);
+              layerCtx.beginPath();
+              layerCtx.moveTo(line.points[0], line.points[1]);
               if (line.points.length === 2) {
-                 ctx.lineTo(line.points[0] + 0.1, line.points[1] + 0.1);
+                 layerCtx.lineTo(line.points[0] + 0.1, line.points[1] + 0.1);
               } else {
                  for (let i = 2; i < line.points.length; i += 2) {
-                   ctx.lineTo(line.points[i], line.points[i + 1]);
+                   layerCtx.lineTo(line.points[i], line.points[i + 1]);
                  }
               }
-              ctx.strokeStyle = layer.stroke || '#ffffff';
-              ctx.lineWidth = line.size || layer.strokeWidth || 5;
-              ctx.globalAlpha = baseAlpha * (line.opacity !== undefined ? line.opacity / 100 : 1);
-              ctx.lineCap = 'round';
-              ctx.lineJoin = 'round';
-              ctx.stroke();
+              layerCtx.strokeStyle = layer.stroke || '#ffffff';
+              layerCtx.lineWidth = line.size || layer.strokeWidth || 5;
+              layerCtx.globalAlpha = line.opacity !== undefined ? line.opacity / 100 : 1;
+              layerCtx.lineCap = 'round';
+              layerCtx.lineJoin = 'round';
+              layerCtx.stroke();
             }
           });
-          ctx.globalAlpha = baseAlpha; // reset
+          layerCtx.globalAlpha = 1; // reset
         }
       } else if (img) {
         if (layer.filters) {
@@ -367,76 +353,137 @@ export const executeImageEditorNode = async (nodeData: any, inputs: NodeExecutio
              filterTokens.push(`invert(100%)`);
           }
           if (filterTokens.length > 0) {
-             ctx.filter = filterTokens.join(' ');
+             layerCtx.filter = filterTokens.join(' ');
           }
         }
-        
-        if (layer.rasterMask && layer.rasterMask.visible !== false) {
-          // Use offscreen canvas to apply mask correctly without erasing background
-          const tempCanvas = document.createElement("canvas");
-          tempCanvas.width = width;
-          tempCanvas.height = height;
-          const tempCtx = tempCanvas.getContext("2d");
-          if (tempCtx) {
-            if (ctx.filter && ctx.filter !== 'none') {
-              tempCtx.filter = ctx.filter;
-              ctx.filter = 'none'; // clear from main ctx
-            }
-            tempCtx.drawImage(img, 0, 0, width, height);
-            tempCtx.filter = 'none';
-            
-            const maskCanvas = document.createElement("canvas");
-            maskCanvas.width = width;
-            maskCanvas.height = height;
-            const maskCtx = maskCanvas.getContext("2d");
-            
-            if (maskCtx) {
-              maskCtx.globalCompositeOperation = 'source-over';
-              if (layer.rasterMask.inverted) {
-                maskCtx.clearRect(0, 0, width, height);
-              } else {
-                maskCtx.fillStyle = '#FFFFFF';
-                maskCtx.fillRect(0, 0, width, height);
-              }
-
-              if (layer.rasterMask.lines) {
-                layer.rasterMask.lines.forEach((l: any) => {
-                  maskCtx.globalCompositeOperation = l.mode === 'erase' ? 'destination-out' : 'source-over';
-                  maskCtx.strokeStyle = '#FFFFFF';
-                  maskCtx.lineWidth = l.size || 20;
-                  maskCtx.lineCap = 'round';
-                  maskCtx.lineJoin = 'round';
-                  maskCtx.globalAlpha = l.opacity !== undefined ? l.opacity / 100 : 1.0;
-
-                  if (l.points && l.points.length >= 2) {
-                    maskCtx.beginPath();
-                    maskCtx.moveTo(l.points[0], l.points[1]);
-                    if (l.points.length === 2) {
-                      maskCtx.lineTo(l.points[0] + 0.1, l.points[1] + 0.1);
-                    } else {
-                      for (let i = 2; i < l.points.length; i += 2) {
-                        maskCtx.lineTo(l.points[i], l.points[i + 1]);
-                      }
-                    }
-                    maskCtx.stroke();
-                  }
-                });
-              }
-
-              tempCtx.globalCompositeOperation = layer.rasterMask.inverted ? "destination-out" : "destination-in";
-              tempCtx.globalAlpha = 1.0;
-              tempCtx.drawImage(maskCanvas, 0, 0);
-            }
-            ctx.drawImage(tempCanvas, 0, 0, width, height);
-          }
-        } else {
-          // Draw image at the local origin (0, 0) since we already translated by -offsetX, -offsetY
-          ctx.drawImage(img, 0, 0, width, height);
-        }
-        
-        ctx.filter = 'none';
+        layerCtx.drawImage(img, 0, 0, width, height);
+        layerCtx.filter = 'none';
       }
-      
+
+      layerCtx.restore(); // restore to un-transformed state for blending!
+
+            const applyMask = (maskData: any, isVector: boolean) => {
+         if (!maskData || maskData.visible === false) return;
+         if (isVector && (!maskData.pathAnchors || maskData.pathAnchors.length < 3)) return;
+
+         // 1. Shape Canvas
+         const shapeCanvas = document.createElement("canvas");
+         shapeCanvas.width = canvasWidth;
+         shapeCanvas.height = canvasHeight;
+         const shapeCtx = shapeCanvas.getContext("2d");
+         if (!shapeCtx) return;
+
+         shapeCtx.translate(centerX, centerY);
+         if (layer.rotation) shapeCtx.rotate((layer.rotation * Math.PI) / 180);
+         if (scaleX !== 1 || scaleY !== 1) shapeCtx.scale(scaleX, scaleY);
+         shapeCtx.translate(-offsetX, -offsetY);
+
+         if (isVector) {
+            shapeCtx.fillStyle = '#FFFFFF';
+            shapeCtx.beginPath();
+            shapeCtx.moveTo(maskData.pathAnchors[0].x, maskData.pathAnchors[0].y);
+            for (let i = 0; i < maskData.pathAnchors.length; i++) {
+                const current = maskData.pathAnchors[i];
+                const next = maskData.pathAnchors[(i + 1) % maskData.pathAnchors.length];
+                if (!maskData.pathClosed && i === maskData.pathAnchors.length - 1) break;
+                const cp1x = current.handleOut ? current.handleOut.x : current.x;
+                const cp1y = current.handleOut ? current.handleOut.y : current.y;
+                const cp2x = next.handleIn ? next.handleIn.x : next.x;
+                const cp2y = next.handleIn ? next.handleIn.y : next.y;
+                shapeCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+            }
+            if (maskData.pathClosed) shapeCtx.closePath();
+            shapeCtx.fill();
+
+            if (maskData.inverted) {
+                const invCanvas = document.createElement("canvas");
+                invCanvas.width = canvasWidth;
+                invCanvas.height = canvasHeight;
+                const invCtx = invCanvas.getContext("2d");
+                if (invCtx) {
+                   invCtx.fillStyle = '#FFFFFF';
+                   invCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+                   invCtx.globalCompositeOperation = 'destination-out';
+                   invCtx.drawImage(shapeCanvas, 0, 0);
+                   
+                   shapeCtx.setTransform(1, 0, 0, 1, 0, 0);
+                   shapeCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+                   shapeCtx.globalCompositeOperation = 'source-over';
+                   shapeCtx.drawImage(invCanvas, 0, 0);
+                }
+            }
+         } else {
+            if (!maskData.inverted) {
+               shapeCtx.fillStyle = '#FFFFFF';
+               shapeCtx.fillRect(-canvasWidth, -canvasHeight, canvasWidth * 3, canvasHeight * 3);
+            }
+            if (maskData.lines) {
+              maskData.lines.forEach((l: any) => {
+                shapeCtx.globalCompositeOperation = l.mode === 'erase' ? 'destination-out' : 'source-over';
+                shapeCtx.strokeStyle = '#FFFFFF';
+                shapeCtx.lineWidth = l.size || 20;
+                shapeCtx.lineCap = 'round';
+                shapeCtx.lineJoin = 'round';
+                shapeCtx.globalAlpha = l.opacity !== undefined ? l.opacity / 100 : 1.0;
+                if (l.points && l.points.length >= 2) {
+                  shapeCtx.beginPath();
+                  shapeCtx.moveTo(l.points[0], l.points[1]);
+                  if (l.points.length === 2) {
+                    shapeCtx.lineTo(l.points[0] + 0.1, l.points[1] + 0.1);
+                  } else {
+                    for (let i = 2; i < l.points.length; i += 2) {
+                      shapeCtx.lineTo(l.points[i], l.points[i + 1]);
+                    }
+                  }
+                  shapeCtx.stroke();
+                }
+              });
+            }
+         }
+
+         // 2 & 3. Feathering and Density
+         const maskCanvas = document.createElement("canvas");
+         maskCanvas.width = canvasWidth;
+         maskCanvas.height = canvasHeight;
+         const maskCtx = maskCanvas.getContext("2d");
+         if (!maskCtx) return;
+
+         if (maskData.feather && maskData.feather > 0) {
+           maskCtx.filter = `blur(${maskData.feather}px)`;
+         }
+         maskCtx.drawImage(shapeCanvas, 0, 0);
+         maskCtx.filter = 'none';
+
+         const density = maskData.density !== undefined ? maskData.density : 100;
+         maskCtx.globalCompositeOperation = 'destination-over';
+         maskCtx.fillStyle = `rgba(255, 255, 255, ${(100 - density) / 100})`;
+         maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+         // Apply to layerCtx
+         layerCtx.save();
+         layerCtx.globalCompositeOperation = 'destination-in';
+         layerCtx.drawImage(maskCanvas, 0, 0);
+         layerCtx.restore();
+      };
+
+      applyMask(layer.rasterMask, false);
+      applyMask(layer.vectorMask, true);
+
+      // 5. Draw layerCanvas to ctx
+      ctx.save();
+      if (layer.opacity !== undefined) {
+        ctx.globalAlpha = layer.opacity;
+      }
+      if (layer.blendMode) {
+        ctx.globalCompositeOperation = layer.blendMode;
+      }
+      if (layer.shadowColor) {
+        ctx.shadowColor = layer.shadowColor;
+        ctx.shadowBlur = layer.shadowBlur || 0;
+        ctx.shadowOffsetX = layer.shadowOffsetX || 0;
+        ctx.shadowOffsetY = layer.shadowOffsetY || 0;
+      }
+      ctx.drawImage(layerCanvas, 0, 0);
       ctx.restore();
     }
 

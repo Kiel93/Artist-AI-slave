@@ -95,6 +95,8 @@ export interface UnityExportParams {
   exportGrid: boolean;
   exportBlueprints: boolean;
   exportIcon: boolean;
+  exportDecals: boolean;
+  decalAssets?: any[];
   iconResolution: number;
   parameters: any;
 }
@@ -104,7 +106,8 @@ export async function exportToUnity(params: UnityExportParams): Promise<Blob> {
     mapDataRef, oceanAsset, groundAsset, objectAssets, decalOverrides,
     generatedOceanTiles, generatedFoamTiles,
     exportOcean, exportGround, exportObjects, exportGrid, exportBlueprints,
-    exportIcon, iconResolution, parameters
+    exportIcon, iconResolution, parameters,
+    exportDecals, decalAssets
   } = params;
 
   try {
@@ -1553,6 +1556,14 @@ public class WebGridRow
             }
           } else {
             promises.push(addDataUrlToZip(id, data.url, 'Textures/Objects'));
+          }
+        }
+      }
+
+      if (exportDecals && decalAssets) {
+        for (const decal of decalAssets) {
+          if (decal.id && decal.imageUrl) {
+            promises.push(addDataUrlToZip(decal.id, decal.imageUrl, 'Textures/Decals'));
           }
         }
       }

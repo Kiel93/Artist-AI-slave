@@ -1010,6 +1010,7 @@ export default function ParameterUI({
   const [exportOcean, setExportOcean] = useState(true);
   const [exportGround, setExportGround] = useState(true);
   const [exportObjects, setExportObjects] = useState(true);
+  const [exportDecals, setExportDecals] = useState(true);
   const [exportGrid, setExportGrid] = useState(true);
   const [exportBlueprints, setExportBlueprints] = useState(true);
   const [exportIcon, setExportIcon] = useState(false);
@@ -1218,6 +1219,8 @@ export default function ParameterUI({
         exportObjects,
         exportGrid,
         exportBlueprints,
+        exportDecals,
+        decalAssets,
         exportIcon,
         iconResolution,
         parameters
@@ -1566,6 +1569,10 @@ export default function ParameterUI({
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={exportObjects} onChange={e => setExportObjects(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
             <span className="text-xs text-gray-300">Object Assets</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={exportDecals} onChange={e => setExportDecals(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />
+            <span className="text-xs text-gray-300">Decals</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={exportGrid} onChange={e => setExportGrid(e.target.checked)} className="rounded-sm bg-black/40 border-gray-600 text-emerald-500 focus:ring-emerald-500/20" />

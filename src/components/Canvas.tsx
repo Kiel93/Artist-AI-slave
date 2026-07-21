@@ -276,23 +276,6 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
       } else if (e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         handleUndo();
-      } else if (e.ctrlKey && e.key.toLowerCase() === 'c') {
-        const selectedNodes = nodesRef.current.filter(n => n.selected);
-        if (selectedNodes.length > 0) {
-          copiedNodesRef.current = selectedNodes;
-          const selectedNodeIds = new Set(selectedNodes.map(n => n.id));
-          const selectedEdges = edgesRef.current.filter(edge =>
-            selectedNodeIds.has(edge.target) // Include internal and external incoming edges
-          );
-          copiedEdgesRef.current = selectedEdges;
-          
-          const clipboardData = {
-            type: 'artist-assistant-nodes',
-            nodes: selectedNodes,
-            edges: selectedEdges
-          };
-          navigator.clipboard.writeText(JSON.stringify(clipboardData)).catch(() => {});
-        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -431,8 +414,37 @@ export default function Canvas({ taskId, isActive = true }: CanvasProps) {
       }
     };
 
+    const handleCopy = (e: ClipboardEvent) => {
+      // Must target canvas area or document body to prevent overriding input fields
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (isActive === false) return;
+
+      const selectedNodes = nodesRef.current.filter(n => n.selected);
+      if (selectedNodes.length > 0) {
+        copiedNodesRef.current = selectedNodes;
+        const selectedNodeIds = new Set(selectedNodes.map(n => n.id));
+        const selectedEdges = edgesRef.current.filter(edge =>
+          selectedNodeIds.has(edge.target)
+        );
+        copiedEdgesRef.current = selectedEdges;
+        
+        const clipboardData = {
+          type: 'artist-assistant-nodes',
+          nodes: selectedNodes,
+          edges: selectedEdges
+        };
+        
+        e.clipboardData?.setData('text/plain', JSON.stringify(clipboardData));
+        e.preventDefault();
+      }
+    };
+
     window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
+    window.addEventListener('copy', handleCopy);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+      window.removeEventListener('copy', handleCopy);
+    };
   }, [isActive, setNodes, setEdges, saveHistory, reactFlowInstance]);
 
   useEffect(() => {

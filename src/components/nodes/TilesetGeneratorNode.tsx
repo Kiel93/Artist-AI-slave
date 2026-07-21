@@ -21,7 +21,7 @@ export default function TilesetGeneratorNode({ id, data, selected }: { id: strin
   const [status, setStatus] = useState<"idle" | "queueing" | "polling" | "succeeded" | "failed">("idle");
   const [image, setImage] = useState<string | null>(data.image || null);
   const [error, setError] = useState<string | null>(null);
-  const [lastRunHash, setLastRunHash] = useState<string>(data.lastRunHash || "");
+
   const [selectedModel, setSelectedModel] = useState<string>(data.model || MODELS[0].id);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [localPrompt, setLocalPrompt] = useState<string>(data.localPrompt || "");
@@ -112,11 +112,6 @@ View: Strict 30-degree isometric.`;
 
     const currentHash = JSON.stringify({ prompt: apiPrompt, model: selectedModel });
 
-    if (status === 'succeeded' && currentHash === lastRunHash && image) {
-      console.log("No changes detected, skipping API call.");
-      return;
-    }
-
     const apiKey = localStorage.getItem("artist-assistant-image-api");
     if (!apiKey) {
       setError("Please enter PlenxAI API Key in Settings.");
@@ -184,7 +179,6 @@ View: Strict 30-degree isometric.`;
       });
 
       if (response.success && response.task_id) {
-        setLastRunHash(currentHash);
         startPolling(response.task_id, apiKey, currentHash);
       } else {
         setError(response.error || "Failed to queue generation.");
@@ -211,7 +205,7 @@ View: Strict 30-degree isometric.`;
           setStatus("succeeded");
           setNodes(nds => nds.map(n => n.id === id ? { 
             ...n, 
-            data: { ...n.data, image: finalUrl, lastRunHash: currentHash, localPrompt } 
+            data: { ...n.data, image: finalUrl, localPrompt } 
           } : n));
           return true;
         } else if (res.status === 'failed' || (res.status as string) === 'error') {
